@@ -65,7 +65,7 @@ class BFGSOptimizer(Optimizer):
 
         bounds = list(zip(space.lower, space.upper))
 
-        jac = self.gradient
+        jac: Callable[[np.ndarray], np.ndarray] | str | None = self.gradient
         if jac is None:
             for attr in ("grad", "gradient", "jac"):
                 maybe = getattr(objective, attr, None)

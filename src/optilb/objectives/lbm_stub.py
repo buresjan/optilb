@@ -38,8 +38,9 @@ def lbm_stub(
     arr = np.asarray(x, dtype=float)
     dim = arr.size
     if centers is None:
-        centers = np.linspace(-0.5, 0.5, dim)
-    centers_arr = np.asarray(list(centers), dtype=float)
+        centers_arr = np.linspace(-0.5, 0.5, dim)
+    else:
+        centers_arr = np.asarray(centers, dtype=float)
     if centers_arr.size != dim:
         raise ValueError("Length of centers must match dimension")
 

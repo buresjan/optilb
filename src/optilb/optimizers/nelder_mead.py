@@ -133,9 +133,9 @@ class NelderMeadOptimizer(Optimizer):
             no_improv = 0
 
             for it in range(max_iter):
-                idx = np.argsort(fvals)
-                simplex = [simplex[i] for i in idx]
-                fvals = [fvals[i] for i in idx]
+                order = np.argsort(fvals)
+                simplex = [simplex[i] for i in order]
+                fvals = [fvals[i] for i in order]
                 current_best = fvals[0]
                 self.record(simplex[0], tag=str(it))
                 if verbose:
