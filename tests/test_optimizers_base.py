@@ -19,6 +19,7 @@ class DummyOptimizer(Optimizer):
         seed: int | None = None,
         parallel: bool = False,
         verbose: bool = False,
+        early_stopper=None,
     ) -> OptResult:
         x0 = self._validate_x0(x0, space)
         self.reset_history()

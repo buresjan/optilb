@@ -111,6 +111,7 @@ class NelderMeadOptimizer(Optimizer):
             np.random.default_rng(seed)
         x0 = self._validate_x0(x0, space)
         self.reset_history()
+        self.record(x0, tag="start")
 
         n = space.dimension
         step = np.asarray(self.step, dtype=float)
@@ -132,7 +133,6 @@ class NelderMeadOptimizer(Optimizer):
                 simplex.append(pt)
             fvals = self._eval_points(penalised, simplex, executor)
 
-            self.record(simplex[np.argmin(fvals)], tag="start")
             best = min(fvals)
             no_improv = 0
 
