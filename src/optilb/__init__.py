@@ -6,6 +6,7 @@ from .core import Constraint, DesignPoint, DesignSpace, OptResult
 from .objectives import get_objective
 from .optimizers import (
     BFGSOptimizer,
+    EarlyStopper,
     MADSOptimizer,
     NelderMeadOptimizer,
     Optimizer,
@@ -22,6 +23,7 @@ __all__ = [
     "BFGSOptimizer",
     "MADSOptimizer",
     "NelderMeadOptimizer",
+    "EarlyStopper",
     "lhs",
     "get_objective",
 ]

@@ -4,7 +4,13 @@
 `BFGSOptimizer` which wraps SciPy's L‑BFGS‑B algorithm for smooth problems.  A
 `MADSOptimizer` is also available which interfaces with NOMAD's Mesh Adaptive
 Direct Search via the `PyNomadBBO` package.  A parallel `NelderMeadOptimizer`
-provides a derivative‑free alternative.
+provides a derivative‑free alternative.  For additional control over run time,
+you can supply an `EarlyStopper` instance that halts the optimisation when no
+progress is seen::
+
+    from optilb.optimizers import NelderMeadOptimizer, EarlyStopper
+    stopper = EarlyStopper(patience=5, eps=0.0)
+    result = NelderMeadOptimizer().optimize(obj, x0, ds, early_stopper=stopper)
 
 ```python
 from optilb.optimizers import Optimizer, BFGSOptimizer

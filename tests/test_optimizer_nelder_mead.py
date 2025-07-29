@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from optilb import Constraint, DesignSpace, get_objective
-from optilb.optimizers import NelderMeadOptimizer
+from optilb.optimizers import EarlyStopper, NelderMeadOptimizer
 
 
 def test_nm_quadratic_dims() -> None:
@@ -36,3 +36,13 @@ def test_nm_parallel() -> None:
     res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=50, parallel=True)
     np.testing.assert_allclose(res.best_x, np.zeros(2), atol=1e-3)
     assert res.best_f == pytest.approx(0.0, abs=1e-6)
+
+
+def test_nm_early_stop_plateau() -> None:
+    ds = DesignSpace(lower=[-2.0], upper=[2.0])
+    obj = get_objective("plateau_cliff")
+    stopper = EarlyStopper(eps=0.0, patience=5)
+    opt = NelderMeadOptimizer()
+    res = opt.optimize(obj, np.array([0.5]), ds, max_iter=50, early_stopper=stopper)
+    assert res.best_f == pytest.approx(0.0, abs=1e-6)
+    assert len(res.history) < 50
