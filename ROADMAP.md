@@ -19,14 +19,14 @@
 
 | # | Title | Status | Target Date |
 |---|-------|--------|-------------|
-| 1 | Repo scaffold & tooling | ☐ |
-| 2 | Core dataclasses | ☐ |
-| 3 | LHS sampler | ☐ |
-| 4 | Analytic objectives | ☐ |
-| 5 | LBM stub objective | ☐ |
+| 1 | Repo scaffold & tooling | ✓ |
+| 2 | Core dataclasses | ✓ |
+| 3 | LHS sampler | ✓ |
+| 4 | Analytic objectives | ✓ |
+| 5 | LBM stub objective | ✓ |
 | 6 | External CFD wrapper | ☐ |
-| 7 | Base optimiser interface | ☐ |
-| 8 | SciPy BFGS wrapper | ☐ |
+| 7 | Base optimiser interface | ✓ |
+| 8 | SciPy BFGS wrapper | ✓ |
 | 9 | PyNOMAD MADS wrapper | ✓ |
 | 10 | Parallel Nelder‑Mead | ☐ |
 | 11 | Early‑stopping utility | ☐ |
