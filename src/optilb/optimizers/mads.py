@@ -7,7 +7,7 @@ import numpy as np
 
 try:
     import PyNomad
-except ImportError as exc:  # pragma: no cover - optional dependency
+except ImportError:  # pragma: no cover - optional dependency
     PyNomad = None  # type: ignore
 
 from ..core import Constraint, DesignSpace, OptResult
@@ -34,7 +34,8 @@ class MADSOptimizer(Optimizer):
     ) -> OptResult:
         if PyNomad is None:
             raise ImportError(
-                "PyNOMAD is not installed; please install PyNomadBBO to use MADSOptimizer"
+                "PyNOMAD is not installed; please install PyNomadBBO to use"
+                " MADSOptimizer"
             )
 
         if seed is not None:

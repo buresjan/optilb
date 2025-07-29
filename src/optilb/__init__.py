@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from .core import Constraint, DesignPoint, DesignSpace, OptResult
 from .objectives import get_objective
-from .optimizers import BFGSOptimizer, MADSOptimizer, Optimizer
+from .optimizers import (
+    BFGSOptimizer,
+    MADSOptimizer,
+    NelderMeadOptimizer,
+    Optimizer,
+)
 from .sampling import lhs
 
 __all__ = [
@@ -16,6 +21,7 @@ __all__ = [
     "Optimizer",
     "BFGSOptimizer",
     "MADSOptimizer",
+    "NelderMeadOptimizer",
     "lhs",
     "get_objective",
 ]

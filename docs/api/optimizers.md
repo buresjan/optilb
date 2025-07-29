@@ -3,7 +3,8 @@
 `optilb.optimizers` defines the common `Optimizer` base class that all local search methods implement.  The toolbox ships a
 `BFGSOptimizer` which wraps SciPy's L‑BFGS‑B algorithm for smooth problems.  A
 `MADSOptimizer` is also available which interfaces with NOMAD's Mesh Adaptive
-Direct Search via the `PyNomadBBO` package.
+Direct Search via the `PyNomadBBO` package.  A parallel `NelderMeadOptimizer`
+provides a derivative‑free alternative.
 
 ```python
 from optilb.optimizers import Optimizer, BFGSOptimizer
@@ -36,4 +37,16 @@ Using the `MADSOptimizer` requires the external `PyNomadBBO` package::
     obj = get_objective("quadratic")
     opt = MADSOptimizer()
     result = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=50)
+    print(result.best_x, result.best_f)
+
+Using the `NelderMeadOptimizer` in parallel mode::
+
+    from optilb import DesignSpace, get_objective
+    from optilb.optimizers import NelderMeadOptimizer
+    import numpy as np
+
+    ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
+    obj = get_objective("quadratic")
+    opt = NelderMeadOptimizer()
+    result = opt.optimize(obj, np.array([2.0, -1.0]), ds, parallel=True)
     print(result.best_x, result.best_f)
