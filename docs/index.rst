@@ -9,4 +9,5 @@ optilb Documentation
    objectives
    api/sampling
    api/objectives
+   api/optimizers
 
