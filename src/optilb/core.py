@@ -43,9 +43,7 @@ class DesignPoint:
 
     x: np.ndarray
     tag: str | None = None
-    timestamp: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "x", np.asarray(self.x, dtype=float))
