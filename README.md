@@ -32,3 +32,8 @@ sampler.  Below is a minimal example::
         print(p.x)
 
 See `ROADMAP.md` for planned features and progress.
+
+## Examples
+
+- `examples/basic_usage.py` – quick sanity checks.
+- `examples/compare_optimisers.py` – benchmark built-in optimisers on toy objectives.
