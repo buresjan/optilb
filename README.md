@@ -8,7 +8,15 @@ wrapped through a unified `OptimizationProblem` interface.  Optional
 Gaussian‑Process surrogates and robust optimisation utilities are scheduled for
 later milestones.
 
-To use the MADS optimiser you need the external `PyNomadBBO` package::
+## Installation
+
+`optilb` targets Python 3.10+ and can be installed from source::
+
+    git clone https://github.com/example/optilb.git
+    cd optilb
+    pip install -r requirements.txt
+
+The `PyNomadBBO` package is optional but required for the `MADSOptimizer`::
 
     pip install PyNomadBBO
 
