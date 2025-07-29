@@ -5,4 +5,4 @@ optilb Documentation
    :maxdepth: 2
    :caption: Contents:
 
-   api
+
