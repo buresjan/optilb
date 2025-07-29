@@ -35,3 +35,12 @@ def test_mads_plateau_cliff_constraint() -> None:
     )
     assert res.best_x[0] <= 0.0
     assert res.best_f == pytest.approx(1.0, abs=1e-6)
+
+
+def test_mads_nfev() -> None:
+    ds = DesignSpace(lower=[-2.0], upper=[2.0])
+    obj = get_objective("quadratic")
+    opt = MADSOptimizer()
+    res = opt.optimize(obj, np.array([1.0]), ds, max_iter=20)
+    assert res.nfev == opt.nfev
+    assert res.nfev >= len(res.history)

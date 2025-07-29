@@ -50,6 +50,7 @@ class MADSOptimizer(Optimizer):
             logger.info("Parallel execution is not yet supported; running serially")
 
         x0 = self._validate_x0(x0, space)
+        objective = self._wrap_objective(objective)
         self.reset_history()
         self.record(x0, tag="start")
         if early_stopper is not None:
@@ -104,4 +105,9 @@ class MADSOptimizer(Optimizer):
         )
         best = np.array(res["x_best"], dtype=float)
         best_f = float(res["f_best"])
-        return OptResult(best_x=best, best_f=best_f, history=self.history)
+        return OptResult(
+            best_x=best,
+            best_f=best_f,
+            history=self.history,
+            nfev=self.nfev,
+        )
