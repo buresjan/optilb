@@ -6,5 +6,7 @@ optilb Documentation
    :caption: Contents:
 
    sampling
+   objectives
    api/sampling
+   api/objectives
 
