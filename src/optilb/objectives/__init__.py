@@ -90,6 +90,68 @@ def plateau_cliff(x: np.ndarray) -> float:
     return 0.0
 
 
+def make_spiky_sine(
+    sigma: float = 0.1, *, seed: int | None = None
+) -> Callable[[np.ndarray], float]:
+    """Noisy sine with discontinuous spikes.
+
+    Only the first element of ``x`` is used. The objective is defined as::
+
+        sin(5 * t) + 0.5 * sign(sin(20 * t)) + N(0, sigma)
+
+    where ``t = x[0]`` and ``N(0, sigma)`` is optional Gaussian noise.
+    The sign term introduces discontinuities and many local extrema.
+    """
+
+    rng = np.random.default_rng(seed)
+
+    def _func(x: np.ndarray) -> float:
+        t = float(np.asarray(x, dtype=float)[0])
+        base = np.sin(5 * t) + 0.5 * np.sign(np.sin(20 * t))
+        noise = float(rng.normal(0.0, sigma)) if sigma > 0 else 0.0
+        return float(base + noise)
+
+    return _func
+
+
+def make_checkerboard(
+    sigma: float = 0.05, *, seed: int | None = None
+) -> Callable[[np.ndarray], float]:
+    """Piecewise checkerboard pattern with noise.
+
+    Requires at least two dimensions.  Returns ``sign(sin(3*x0))`` multiplied
+    by ``sign(sin(3*x1))`` plus Gaussian noise.
+    """
+
+    rng = np.random.default_rng(seed)
+
+    def _func(x: np.ndarray) -> float:
+        arr = np.asarray(x, dtype=float)
+        if arr.size < 2:
+            raise ValueError("checkerboard requires at least 2 dimensions")
+        val = np.sign(np.sin(3 * arr[0])) * np.sign(np.sin(3 * arr[1]))
+        noise = float(rng.normal(0.0, sigma)) if sigma > 0 else 0.0
+        return float(val + noise)
+
+    return _func
+
+
+def make_step_rastrigin(
+    sigma: float = 0.05, *, seed: int | None = None
+) -> Callable[[np.ndarray], float]:
+    """Rastrigin evaluated on floored inputs with noise."""
+
+    rng = np.random.default_rng(seed)
+
+    def _func(x: np.ndarray) -> float:
+        arr = np.asarray(x, dtype=float)
+        val = rastrigin(np.floor(arr))
+        noise = float(rng.normal(0.0, sigma)) if sigma > 0 else 0.0
+        return float(val + noise)
+
+    return _func
+
+
 Objective = Callable[[np.ndarray], float]
 
 
@@ -110,6 +172,12 @@ def get_objective(name: str, **kwargs) -> Callable[[np.ndarray], float]:
         return rastrigin
     if key == "noisy_discontinuous":
         return make_noisy_discontinuous(**kwargs)
+    if key == "spiky_sine":
+        return make_spiky_sine(**kwargs)
+    if key == "checkerboard":
+        return make_checkerboard(**kwargs)
+    if key in {"step_rastrigin", "noisy_step_rastrigin"}:
+        return make_step_rastrigin(**kwargs)
     if key == "plateau_cliff":
         return plateau_cliff
     if key in {"lbm", "lbm_stub"}:
@@ -121,6 +189,9 @@ __all__ = [
     "quadratic_bowl",
     "rastrigin",
     "make_noisy_discontinuous",
+    "make_spiky_sine",
+    "make_checkerboard",
+    "make_step_rastrigin",
     "plateau_cliff",
     "lbm_stub",
     "get_objective",
