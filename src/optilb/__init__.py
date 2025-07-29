@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .core import Constraint, DesignPoint, DesignSpace, OptResult
 from .objectives import get_objective
-from .optimizers import BFGSOptimizer, Optimizer
+from .optimizers import BFGSOptimizer, MADSOptimizer, Optimizer
 from .sampling import lhs
 
 __all__ = [
@@ -15,6 +15,7 @@ __all__ = [
     "OptResult",
     "Optimizer",
     "BFGSOptimizer",
+    "MADSOptimizer",
     "lhs",
     "get_objective",
 ]

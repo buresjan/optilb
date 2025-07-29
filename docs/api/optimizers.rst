@@ -2,5 +2,5 @@ Optimizers API
 ==============
 
 .. automodule:: optilb.optimizers
-    :members: Optimizer, BFGSOptimizer
+    :members: Optimizer, BFGSOptimizer, MADSOptimizer
     :undoc-members:

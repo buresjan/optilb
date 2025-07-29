@@ -8,6 +8,10 @@ wrapped through a unified `OptimizationProblem` interface.  Optional
 Gaussian‑Process surrogates and robust optimisation utilities are scheduled for
 later milestones.
 
+To use the MADS optimiser you need the external `PyNomadBBO` package::
+
+    pip install PyNomadBBO
+
 The current codebase provides the core data classes and a Latin-Hypercube
 sampler.  Below is a minimal example::
 

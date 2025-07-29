@@ -27,7 +27,7 @@
 | 6 | External CFD wrapper | ☐ |
 | 7 | Base optimiser interface | ☐ |
 | 8 | SciPy BFGS wrapper | ☐ |
-| 9 | PyNOMAD MADS wrapper | ☐ |
+| 9 | PyNOMAD MADS wrapper | ✓ |
 | 10 | Parallel Nelder‑Mead | ☐ |
 | 11 | Early‑stopping utility | ☐ |
 | 12 | UQ module | ☐ |
