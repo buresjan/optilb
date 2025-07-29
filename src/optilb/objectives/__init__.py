@@ -4,6 +4,8 @@ from typing import Callable
 
 import numpy as np
 
+from .lbm_stub import lbm_stub
+
 
 def quadratic_bowl(x: np.ndarray) -> float:
     """Quadratic bowl function.
@@ -110,6 +112,8 @@ def get_objective(name: str, **kwargs) -> Callable[[np.ndarray], float]:
         return make_noisy_discontinuous(**kwargs)
     if key == "plateau_cliff":
         return plateau_cliff
+    if key in {"lbm", "lbm_stub"}:
+        return lbm_stub
     raise ValueError(f"Unknown objective '{name}'")
 
 
@@ -118,5 +122,6 @@ __all__ = [
     "rastrigin",
     "make_noisy_discontinuous",
     "plateau_cliff",
+    "lbm_stub",
     "get_objective",
 ]

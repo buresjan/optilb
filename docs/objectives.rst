@@ -12,5 +12,7 @@ Example::
     quad = get_objective("quadratic")
     print(quad(np.array([0.0, 0.0])))  # 0.0
 
-Available names are ``quadratic``, ``rastrigin``, ``noisy_discontinuous`` and
-``plateau_cliff``. See the docstrings for details.
+Available names are ``quadratic``, ``rastrigin``, ``noisy_discontinuous``,
+``plateau_cliff`` and ``lbm_stub``. The last one is a purely numerical
+surrogate for an LBM solver and **is not physically accurate**.
+See the docstrings for details.
