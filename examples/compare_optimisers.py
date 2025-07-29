@@ -71,13 +71,15 @@ def run_benchmark() -> None:
                     early_stopper=stopper,
                 )
                 dt = time.perf_counter() - t0
+                optimum_val = get_objective(obj_name, sigma=0.0)(np.zeros(dim))
                 rows.append(
                     {
                         "objective": obj_name,
                         "dim": dim,
                         "optimizer": name,
                         "best_f": res.best_f,
-                        "evals": len(res.history),
+                        "optimum": optimum_val,
+                        "evals": res.nfev,
                         "time_s": dt,
                         "early_stop": stopper._counter >= stopper.patience,
                     }

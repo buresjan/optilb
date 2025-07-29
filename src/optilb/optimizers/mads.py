@@ -83,7 +83,6 @@ class MADSOptimizer(Optimizer):
             for g in con_funcs:
                 vals.append(float(g(arr)))
             point.setBBO(" ".join(str(v) for v in vals).encode("utf-8"))
-            self.record(arr, tag=f"{len(self._history)}")
             return 1
 
         output_types = "OBJ" + " PB" * len(con_funcs)
