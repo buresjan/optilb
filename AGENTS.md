@@ -38,6 +38,7 @@ Every agent **must also read `ROADMAP.md`** to understand the big‑picture visi
 | **Imports** | Absolute inside `optilb.*`; relative (`.`) only inside sub‑packages. |
 | **Logging** | Use the project‑wide logger obtained via `logging.getLogger("optilb")`. |
 | **Errors** | Prefer custom exceptions under `optilb.exceptions` to `RuntimeError`. |
+| **Dependencies** | Keep `requirements.txt` updated whenever a new dependency is added. |
 
 ---
 
