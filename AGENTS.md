@@ -33,7 +33,7 @@ Every agent **must also read `ROADMAP.md`** to understand the big‑picture visi
 | **Layout** | Source lives in `src/optilb/`; tests in `tests/`; notebooks in `examples/`; docs in `docs/`. |
 | **Packaging** | PEP 517 via `pyproject.toml`; no `setup.py`. |
 | **Python ver.** | 3.10 ≤ version ≤ 3.12. |
-| **Style** | `black`, `isort`, `flake8`, `mypy`; run `pre‑commit run --all-files` before committing. |
+| **Style** | `black`, `isort`, `flake8`, `mypy`. |
 | **Typing** | Use *PEP 563 postponed annotations* and `from __future__ import annotations`. |
 | **Imports** | Absolute inside `optilb.*`; relative (`.`) only inside sub‑packages. |
 | **Logging** | Use the project‑wide logger obtained via `logging.getLogger("optilb")`. |
