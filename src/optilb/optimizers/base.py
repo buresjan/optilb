@@ -6,6 +6,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from ..core import Constraint, DesignPoint, DesignSpace, OptResult
+from .early_stop import EarlyStopper
 
 
 class Optimizer(ABC):
@@ -55,5 +56,6 @@ class Optimizer(ABC):
         seed: int | None = None,
         parallel: bool = False,
         verbose: bool = False,
+        early_stopper: EarlyStopper | None = None,
     ) -> OptResult:
         """Run optimisation and return the result."""

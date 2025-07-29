@@ -8,6 +8,7 @@ from scipy import optimize
 
 from ..core import Constraint, DesignSpace, OptResult
 from .base import Optimizer
+from .early_stop import EarlyStopper
 
 logger = logging.getLogger("optilb")
 
@@ -47,6 +48,7 @@ class BFGSOptimizer(Optimizer):
         seed: int | None = None,
         parallel: bool = False,
         verbose: bool = False,
+        early_stopper: EarlyStopper | None = None,
     ) -> OptResult:
         """Run the optimiser.
 
@@ -84,8 +86,15 @@ class BFGSOptimizer(Optimizer):
         if self.step is not None:
             options["eps"] = self.step
 
+        if early_stopper is not None:
+            early_stopper.reset()
+
         def _callback(xk: np.ndarray) -> None:
             self.record(xk, tag=f"{len(self._history)}")
+            if early_stopper is not None:
+                f_val = float(objective(xk))
+                if early_stopper.update(f_val):
+                    raise StopIteration
 
         try:
             res = optimize.minimize(

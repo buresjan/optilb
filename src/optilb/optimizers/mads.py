@@ -12,6 +12,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 from ..core import Constraint, DesignSpace, OptResult
 from .base import Optimizer
+from .early_stop import EarlyStopper
 
 logger = logging.getLogger("optilb")
 
@@ -31,6 +32,7 @@ class MADSOptimizer(Optimizer):
         seed: int | None = None,
         parallel: bool = False,
         verbose: bool = False,
+        early_stopper: EarlyStopper | None = None,
     ) -> OptResult:
         if PyNomad is None:
             raise ImportError(
@@ -50,6 +52,8 @@ class MADSOptimizer(Optimizer):
         x0 = self._validate_x0(x0, space)
         self.reset_history()
         self.record(x0, tag="start")
+        if early_stopper is not None:
+            early_stopper.reset()
 
         dim = space.dimension
 
@@ -88,6 +92,8 @@ class MADSOptimizer(Optimizer):
             f"BB_OUTPUT_TYPE {output_types}",
             f"DISPLAY_DEGREE {1 if verbose else 0}",
         ]
+        if early_stopper is not None and early_stopper.f_target is not None:
+            params.append(f"OBJ_TARGET {early_stopper.f_target}")
 
         res = PyNomad.optimize(
             _bb,

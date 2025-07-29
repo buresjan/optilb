@@ -9,6 +9,7 @@ import numpy as np
 
 from ..core import Constraint, DesignSpace, OptResult
 from .base import Optimizer
+from .early_stop import EarlyStopper
 
 
 def _evaluate_point(
@@ -104,6 +105,7 @@ class NelderMeadOptimizer(Optimizer):
         seed: int | None = None,
         parallel: bool = False,
         verbose: bool = False,
+        early_stopper: EarlyStopper | None = None,
     ) -> OptResult:
         if seed is not None:
             np.random.default_rng(seed)
@@ -120,6 +122,8 @@ class NelderMeadOptimizer(Optimizer):
         penalised = self._make_penalised(objective, space, constraints)
 
         executor = ProcessPoolExecutor(max_workers=self.n_workers) if parallel else None
+        if early_stopper is not None:
+            early_stopper.reset()
         try:
             simplex = [x0]
             for i in range(n):
@@ -141,13 +145,17 @@ class NelderMeadOptimizer(Optimizer):
                 if verbose:
                     logger.info("%d | best %.6f", it, current_best)
 
-                if best - current_best > tol:
-                    best = current_best
-                    no_improv = 0
+                if early_stopper is None:
+                    if best - current_best > tol:
+                        best = current_best
+                        no_improv = 0
+                    else:
+                        no_improv += 1
+                    if no_improv >= self.no_improv_break:
+                        break
                 else:
-                    no_improv += 1
-                if no_improv >= self.no_improv_break:
-                    break
+                    if early_stopper.update(current_best):
+                        break
 
                 centroid = np.mean(simplex[:-1], axis=0)
                 worst = simplex[-1]
