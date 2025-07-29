@@ -5,4 +5,6 @@ optilb Documentation
    :maxdepth: 2
    :caption: Contents:
 
+   sampling
+   api/sampling
 

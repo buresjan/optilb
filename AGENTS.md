@@ -66,6 +66,8 @@ Every agent **must also read `ROADMAP.md`** to understand the big‑picture visi
 3. After merging to `main`, CI auto‑builds HTML with `sphinx -W` (warnings as errors) and deploys to GitHub Pages.
 4. Keep `README.md` updated whenever features are added or changed.
 5. For each new functionality, add a dedicated documentation file under `docs/` describing it in detail.
+6. Provide both `.rst` and `.md` versions of each documentation page so that Sphinx and GitHub viewers stay in sync.
+7. Documentation **must** include a short usage snippet so that new tools and agents can replicate the feature easily. Pull requests lacking accompanying docs are rejected.
 
 ---
 
