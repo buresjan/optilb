@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Callable
 
 import numpy as np
@@ -38,33 +39,28 @@ def rastrigin(x: np.ndarray) -> float:
     return float(10 * n + np.sum(x**2 - 10 * np.cos(2 * np.pi * x)))
 
 
+@dataclass(slots=True)
+class _NoisyDiscontinuous:
+    sigma: float = 0.1
+    seed: int | None = None
+    rng: np.random.Generator = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.rng = np.random.default_rng(self.seed)
+
+    def __call__(self, x: np.ndarray) -> float:
+        arr = np.asarray(x, dtype=float)
+        val = float(np.sum(np.floor(arr)))
+        noise = float(self.rng.normal(0.0, self.sigma)) if self.sigma > 0 else 0.0
+        return val + noise
+
+
 def make_noisy_discontinuous(
     sigma: float = 0.1, *, seed: int | None = None
 ) -> Callable[[np.ndarray], float]:
-    """Create a noisy discontinuous objective.
+    """Create a noisy discontinuous objective."""
 
-    The base function is ``f(x) = sum(floor(x_i))``. Gaussian noise is added
-    afterwards. The global minimum is ``0`` for ``x`` in ``[0, 1)^n``.
-
-    Args:
-        sigma: Standard deviation of the added Gaussian noise.
-        seed: Optional random seed for reproducibility.
-
-    Example:
-        >>> f = make_noisy_discontinuous(sigma=0.0)
-        >>> f(np.array([0.5, 0.5]))
-        0.0
-    """
-
-    rng = np.random.default_rng(seed)
-
-    def _func(x: np.ndarray) -> float:
-        arr = np.asarray(x, dtype=float)
-        val = float(np.sum(np.floor(arr)))
-        noise = float(rng.normal(0.0, sigma)) if sigma > 0 else 0.0
-        return val + noise
-
-    return _func
+    return _NoisyDiscontinuous(sigma=sigma, seed=seed)
 
 
 def plateau_cliff(x: np.ndarray) -> float:
@@ -90,50 +86,70 @@ def plateau_cliff(x: np.ndarray) -> float:
     return 0.0
 
 
+@dataclass(slots=True)
+class _SpikySine:
+    sigma: float = 0.1
+    seed: int | None = None
+    rng: np.random.Generator = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.rng = np.random.default_rng(self.seed)
+
+    def __call__(self, x: np.ndarray) -> float:
+        t = float(np.asarray(x, dtype=float)[0])
+        base = np.sin(5 * t) + 0.5 * np.sign(np.sin(20 * t))
+        noise = float(self.rng.normal(0.0, self.sigma)) if self.sigma > 0 else 0.0
+        return float(base + noise)
+
+
 def make_spiky_sine(
     sigma: float = 0.1, *, seed: int | None = None
 ) -> Callable[[np.ndarray], float]:
-    """Noisy sine with discontinuous spikes.
+    """Noisy sine with discontinuous spikes."""
 
-    Only the first element of ``x`` is used. The objective is defined as::
+    return _SpikySine(sigma=sigma, seed=seed)
 
-        sin(5 * t) + 0.5 * sign(sin(20 * t)) + N(0, sigma)
 
-    where ``t = x[0]`` and ``N(0, sigma)`` is optional Gaussian noise.
-    The sign term introduces discontinuities and many local extrema.
-    """
+@dataclass(slots=True)
+class _Checkerboard:
+    sigma: float = 0.05
+    seed: int | None = None
+    rng: np.random.Generator = field(init=False, repr=False)
 
-    rng = np.random.default_rng(seed)
+    def __post_init__(self) -> None:
+        self.rng = np.random.default_rng(self.seed)
 
-    def _func(x: np.ndarray) -> float:
-        t = float(np.asarray(x, dtype=float)[0])
-        base = np.sin(5 * t) + 0.5 * np.sign(np.sin(20 * t))
-        noise = float(rng.normal(0.0, sigma)) if sigma > 0 else 0.0
-        return float(base + noise)
-
-    return _func
+    def __call__(self, x: np.ndarray) -> float:
+        arr = np.asarray(x, dtype=float)
+        if arr.size < 2:
+            raise ValueError("checkerboard requires at least 2 dimensions")
+        val = np.sign(np.sin(3 * arr[0])) * np.sign(np.sin(3 * arr[1]))
+        noise = float(self.rng.normal(0.0, self.sigma)) if self.sigma > 0 else 0.0
+        return float(val + noise)
 
 
 def make_checkerboard(
     sigma: float = 0.05, *, seed: int | None = None
 ) -> Callable[[np.ndarray], float]:
-    """Piecewise checkerboard pattern with noise.
+    """Piecewise checkerboard pattern with noise."""
 
-    Requires at least two dimensions.  Returns ``sign(sin(3*x0))`` multiplied
-    by ``sign(sin(3*x1))`` plus Gaussian noise.
-    """
+    return _Checkerboard(sigma=sigma, seed=seed)
 
-    rng = np.random.default_rng(seed)
 
-    def _func(x: np.ndarray) -> float:
+@dataclass(slots=True)
+class _StepRastrigin:
+    sigma: float = 0.05
+    seed: int | None = None
+    rng: np.random.Generator = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.rng = np.random.default_rng(self.seed)
+
+    def __call__(self, x: np.ndarray) -> float:
         arr = np.asarray(x, dtype=float)
-        if arr.size < 2:
-            raise ValueError("checkerboard requires at least 2 dimensions")
-        val = np.sign(np.sin(3 * arr[0])) * np.sign(np.sin(3 * arr[1]))
-        noise = float(rng.normal(0.0, sigma)) if sigma > 0 else 0.0
+        val = rastrigin(np.floor(arr))
+        noise = float(self.rng.normal(0.0, self.sigma)) if self.sigma > 0 else 0.0
         return float(val + noise)
-
-    return _func
 
 
 def make_step_rastrigin(
@@ -141,15 +157,7 @@ def make_step_rastrigin(
 ) -> Callable[[np.ndarray], float]:
     """Rastrigin evaluated on floored inputs with noise."""
 
-    rng = np.random.default_rng(seed)
-
-    def _func(x: np.ndarray) -> float:
-        arr = np.asarray(x, dtype=float)
-        val = rastrigin(np.floor(arr))
-        noise = float(rng.normal(0.0, sigma)) if sigma > 0 else 0.0
-        return float(val + noise)
-
-    return _func
+    return _StepRastrigin(sigma=sigma, seed=seed)
 
 
 Objective = Callable[[np.ndarray], float]
