@@ -39,7 +39,7 @@ def lhs(
     if centered:
         scramble = False
 
-    sampler = qmc.LatinHypercube(d=design_space.dimension, scramble=scramble, rng=rng)
+    sampler = qmc.LatinHypercube(d=design_space.dimension, scramble=scramble, seed=rng)
     sample = sampler.random(n=sample_count)
     scaled = qmc.scale(sample, design_space.lower, design_space.upper)
 

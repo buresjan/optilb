@@ -31,7 +31,13 @@ def run_benchmark() -> None:
 
     rows: list[dict[str, object]] = []
 
-    objectives = ["quadratic", "rastrigin"]
+    objectives = [
+        "quadratic",
+        "rastrigin",
+        "checkerboard",
+        "step_rastrigin",
+        "spiky_sine",
+    ]
     dims = [2, 3, 5]
 
     for obj_name in objectives:

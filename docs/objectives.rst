@@ -13,6 +13,7 @@ Example::
     print(quad(np.array([0.0, 0.0])))  # 0.0
 
 Available names are ``quadratic``, ``rastrigin``, ``noisy_discontinuous``,
-``plateau_cliff`` and ``lbm_stub``. The last one is a purely numerical
+``checkerboard``, ``step_rastrigin``, ``spiky_sine``, ``plateau_cliff`` and
+``lbm_stub``. The last one is a purely numerical
 surrogate for an LBM solver and **is not physically accurate**.
 See the docstrings for details.
