@@ -63,6 +63,8 @@ Every agent **must also read `ROADMAP.md`** to understand the big‑picture visi
 1. Docstrings use **Google style**.  
 2. Every public symbol appears in `docs/api/`.  
 3. After merging to `main`, CI auto‑builds HTML with `sphinx -W` (warnings as errors) and deploys to GitHub Pages.
+4. Keep `README.md` updated whenever features are added or changed.
+5. For each new functionality, add a dedicated documentation file under `docs/` describing it in detail.
 
 ---
 
