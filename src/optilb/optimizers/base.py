@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Callable, Sequence
 
 import numpy as np
@@ -9,11 +10,22 @@ from ..core import Constraint, DesignPoint, DesignSpace, OptResult
 from .early_stop import EarlyStopper
 
 
+@dataclass
+class _CountingFunction:
+    func: Callable[[np.ndarray], float]
+    optimizer: "Optimizer"
+
+    def __call__(self, x: np.ndarray) -> float:
+        self.optimizer._nfev += 1
+        return float(self.func(x))
+
+
 class Optimizer(ABC):
     """Abstract base class for local optimisers."""
 
     def __init__(self) -> None:
         self._history: list[DesignPoint] = []
+        self._nfev: int = 0
 
     # ------------------------------------------------------------------
     # Utility methods shared by all optimisers
@@ -23,9 +35,15 @@ class Optimizer(ABC):
         """Sequence of recorded design points."""
         return tuple(self._history)
 
+    @property
+    def nfev(self) -> int:
+        """Number of objective function evaluations so far."""
+        return self._nfev
+
     def reset_history(self) -> None:
         """Clear stored optimisation history."""
         self._history.clear()
+        self._nfev = 0
 
     def record(self, x: np.ndarray, tag: str | None = None) -> None:
         """Record a point in the optimisation history."""
@@ -39,6 +57,13 @@ class Optimizer(ABC):
         if np.any(arr < space.lower) or np.any(arr > space.upper):
             raise ValueError("Initial point outside design bounds")
         return arr
+
+    def _wrap_objective(
+        self, objective: Callable[[np.ndarray], float]
+    ) -> Callable[[np.ndarray], float]:
+        """Return objective wrapper that increments the evaluation counter."""
+
+        return _CountingFunction(func=objective, optimizer=self)
 
     # ------------------------------------------------------------------
     # Main optimisation hook

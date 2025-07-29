@@ -110,6 +110,7 @@ class NelderMeadOptimizer(Optimizer):
         if seed is not None:
             np.random.default_rng(seed)
         x0 = self._validate_x0(x0, space)
+        objective = self._wrap_objective(objective)
         self.reset_history()
         self.record(x0, tag="start")
 
@@ -208,4 +209,9 @@ class NelderMeadOptimizer(Optimizer):
         idx = int(np.argmin(fvals))
         best_x = simplex[idx]
         best_f = fvals[idx]
-        return OptResult(best_x=best_x, best_f=float(best_f), history=self.history)
+        return OptResult(
+            best_x=best_x,
+            best_f=float(best_f),
+            history=self.history,
+            nfev=self.nfev,
+        )

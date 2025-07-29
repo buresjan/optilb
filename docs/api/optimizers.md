@@ -33,6 +33,9 @@ Using the provided `BFGSOptimizer`::
     result = opt.optimize(obj, np.array([3.0, -2.0]), ds)
     print(result.best_x, result.best_f)
 
+The returned `OptResult` also records `nfev`, the total number of objective
+function evaluations.
+
 Using the `MADSOptimizer` requires the external `PyNomadBBO` package::
 
     from optilb import DesignSpace, get_objective

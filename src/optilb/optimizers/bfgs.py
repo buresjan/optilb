@@ -77,6 +77,8 @@ class BFGSOptimizer(Optimizer):
             else:
                 jac = "3-point"
 
+        objective = self._wrap_objective(objective)
+
         options: dict[str, float | int | bool] = {
             "maxiter": max_iter,
             "ftol": tol,
@@ -110,10 +112,18 @@ class BFGSOptimizer(Optimizer):
             logger.info("Optimization stopped early by callback")
             best = self.history[-1].x
             return OptResult(
-                best_x=best, best_f=float(objective(best)), history=self.history
+                best_x=best,
+                best_f=float(objective(best)),
+                history=self.history,
+                nfev=self.nfev,
             )
 
         if res.status != 0:
             logger.warning("SciPy optimisation did not converge: %s", res.message)
 
-        return OptResult(best_x=res.x, best_f=float(res.fun), history=self.history)
+        return OptResult(
+            best_x=res.x,
+            best_f=float(res.fun),
+            history=self.history,
+            nfev=self.nfev,
+        )

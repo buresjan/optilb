@@ -46,3 +46,12 @@ def test_nm_early_stop_plateau() -> None:
     res = opt.optimize(obj, np.array([0.5]), ds, max_iter=50, early_stopper=stopper)
     assert res.best_f == pytest.approx(0.0, abs=1e-6)
     assert len(res.history) < 50
+
+
+def test_nm_nfev() -> None:
+    ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
+    obj = get_objective("quadratic")
+    opt = NelderMeadOptimizer()
+    res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=20)
+    assert res.nfev == opt.nfev
+    assert res.nfev >= len(res.history)

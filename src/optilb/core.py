@@ -76,6 +76,7 @@ class OptResult:
     best_x: np.ndarray
     best_f: float
     history: Sequence[DesignPoint] = field(default_factory=tuple)
+    nfev: int = 0
 
     def __post_init__(self) -> None:
         arr = np.asarray(self.best_x, dtype=float)
@@ -90,4 +91,5 @@ class OptResult:
             np.array_equal(self.best_x, other.best_x)
             and self.best_f == other.best_f
             and self.history == other.history
+            and self.nfev == other.nfev
         )

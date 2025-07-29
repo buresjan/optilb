@@ -38,3 +38,12 @@ def test_bfgs_early_stop_target() -> None:
     )
     assert res.best_f <= 0.5
     assert len(res.history) < 100
+
+
+def test_bfgs_nfev() -> None:
+    ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
+    obj = get_objective("quadratic")
+    opt = BFGSOptimizer()
+    res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=10)
+    assert res.nfev == opt.nfev
+    assert res.nfev >= len(res.history)
