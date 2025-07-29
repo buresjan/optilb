@@ -3,10 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-pytest.importorskip("PyNomad")
+pytest.importorskip("PyNomad")  # noqa: E402
 
-from optilb import Constraint, DesignSpace, get_objective
-from optilb.optimizers import MADSOptimizer
+from optilb import Constraint, DesignSpace, get_objective  # noqa: E402
+from optilb.optimizers import MADSOptimizer  # noqa: E402
 
 
 def test_mads_quadratic_dims() -> None:
@@ -26,6 +26,12 @@ def test_mads_plateau_cliff_constraint() -> None:
     obj = get_objective("plateau_cliff")
     cons = [Constraint(func=lambda x: x[0] - 0.0, name="x<=0")]
     opt = MADSOptimizer()
-    res = opt.optimize(obj, np.array([-1.0]), ds, constraints=cons, max_iter=50)
+    res = opt.optimize(
+        obj,
+        np.array([-1.0]),
+        ds,
+        constraints=cons,
+        max_iter=50,
+    )
     assert res.best_x[0] <= 0.0
     assert res.best_f == pytest.approx(1.0, abs=1e-6)
