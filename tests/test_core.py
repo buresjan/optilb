@@ -10,7 +10,9 @@ from optilb import Constraint, DesignPoint, DesignSpace, OptResult
 
 def test_designspace_equality_and_pickle() -> None:
     ds1 = DesignSpace(lower=[0, 0], upper=[1, 1], names=["a", "b"])
-    ds2 = DesignSpace(lower=np.array([0, 0], dtype=float), upper=[1, 1], names=["a", "b"])
+    ds2 = DesignSpace(
+        lower=np.array([0, 0], dtype=float), upper=[1, 1], names=["a", "b"]
+    )
     assert ds1 == ds2
     ds3 = pickle.loads(pickle.dumps(ds1))
     assert ds1 == ds3

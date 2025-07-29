@@ -1,7 +1,7 @@
 # Objectives API
 
-This module exposes simple analytic benchmark functions. Use
-`optilb.get_objective` to obtain them by name.
+This module exposes simple analytic benchmark functions plus a lightweight
+``lbm_stub`` surrogate. Use `optilb.get_objective` to obtain them by name.
 
 ```python
 from optilb import get_objective
