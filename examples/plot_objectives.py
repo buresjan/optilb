@@ -12,6 +12,15 @@ import numpy as np
 
 from optilb import get_objective
 
+OPTIMUM_VALUES = {
+    "quadratic": 0.0,
+    "rastrigin": 0.0,
+    "checkerboard": -1.0,
+    "step_rastrigin": 0.0,
+    "lbm_stub": -0.1,
+    "noisy_discontinuous": float("-inf"),
+}
+
 OBJECTIVES = [
     "quadratic",
     "rastrigin",
@@ -34,7 +43,12 @@ for name in OBJECTIVES:
     plt.contourf(X, Y, Z, levels=20)
     plt.xlabel("x1")
     plt.ylabel("x2")
-    plt.title(f"{name} objective")
+    optimum = OPTIMUM_VALUES.get(name, float("nan"))
+    if np.isfinite(optimum):
+        title = f"{name} objective (min {optimum:.2f})"
+    else:
+        title = f"{name} objective (min unbounded)"
+    plt.title(title)
     plt.colorbar(label="cost")
     plt.tight_layout()
     plt.show()

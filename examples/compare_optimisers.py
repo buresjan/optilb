@@ -26,6 +26,16 @@ np.random.seed(42)
 MAX_ITER = 200
 
 
+# Known global minima of the benchmark objectives (noise-free).
+OPTIMUM_VALUES = {
+    "quadratic": 0.0,
+    "rastrigin": 0.0,
+    "checkerboard": -1.0,
+    "step_rastrigin": 0.0,
+    "spiky_sine": -1.5,
+}
+
+
 def run_benchmark() -> None:
     import pandas as pd  # local import to avoid hard dependency
 
@@ -71,7 +81,7 @@ def run_benchmark() -> None:
                     early_stopper=stopper,
                 )
                 dt = time.perf_counter() - t0
-                optimum_val = get_objective(obj_name, sigma=0.0)(np.zeros(dim))
+                optimum_val = OPTIMUM_VALUES.get(obj_name, float("nan"))
                 rows.append(
                     {
                         "objective": obj_name,
