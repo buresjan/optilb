@@ -1,7 +1,20 @@
 from __future__ import annotations
 
 import logging
+import sys
 from concurrent.futures import ProcessPoolExecutor
+
+# nullcontext is 3.7+.  Provide a tiny shim for 3.6 users.
+if sys.version_info >= (3, 7):
+    from contextlib import nullcontext  # type: ignore[attr-defined]
+else:
+    from contextlib import contextmanager
+
+    @contextmanager
+    def nullcontext():
+        yield
+
+
 from functools import partial
 from typing import Callable, Iterable, Sequence
 
@@ -37,7 +50,13 @@ logger = logging.getLogger("optilb")
 
 
 class NelderMeadOptimizer(Optimizer):
-    """Parallel Nelder–Mead optimiser."""
+    """Parallel Nelder–Mead optimiser.
+
+    The optimiser can evaluate independent simplex points concurrently when
+    :meth:`optimize` is called with ``parallel=True``. Identical numerical
+    results are expected in both modes, although parallel execution incurs a
+    small process startup overhead.
+    """
 
     def __init__(
         self,
@@ -63,6 +82,8 @@ class NelderMeadOptimizer(Optimizer):
         self.no_improve_thr = no_improve_thr
         self.no_improv_break = no_improv_break
         self.penalty = penalty
+
+        # NEW: remember worker count so optimize() can pass it to the pool
         self.n_workers = n_workers
 
     # ------------------------------------------------------------------
@@ -89,8 +110,7 @@ class NelderMeadOptimizer(Optimizer):
     ) -> list[float]:
         if executor is None:
             return [func(p) for p in points]
-        futures = [executor.submit(func, p) for p in points]
-        return [f.result() for f in futures]
+        return list(executor.map(func, points))
 
     # ------------------------------------------------------------------
     def optimize(
@@ -107,6 +127,17 @@ class NelderMeadOptimizer(Optimizer):
         verbose: bool = False,
         early_stopper: EarlyStopper | None = None,
     ) -> OptResult:
+        """Run optimisation.
+
+        Parameters
+        ----------
+        parallel : bool, optional
+            Evaluate independent simplex points concurrently using a
+            :class:`concurrent.futures.ProcessPoolExecutor`. The objective
+            function must be picklable. Numerical results should match the
+            sequential mode, but parallel execution may be faster when the
+            objective is expensive.
+        """
         if seed is not None:
             np.random.default_rng(seed)
         x0 = self._validate_x0(x0, space)
@@ -123,10 +154,14 @@ class NelderMeadOptimizer(Optimizer):
 
         penalised = self._make_penalised(objective, space, constraints)
 
-        executor = ProcessPoolExecutor(max_workers=self.n_workers) if parallel else None
         if early_stopper is not None:
             early_stopper.reset()
-        try:
+
+        with (
+            ProcessPoolExecutor(max_workers=self.n_workers)
+            if parallel
+            else nullcontext()
+        ) as executor:
             simplex = [x0]
             for i in range(n):
                 pt = x0.copy()
@@ -202,9 +237,6 @@ class NelderMeadOptimizer(Optimizer):
                 new_f = self._eval_points(penalised, new_points[1:], executor)
                 simplex = new_points
                 fvals = [fvals[0]] + list(new_f)
-        finally:
-            if executor is not None:
-                executor.shutdown()
 
         idx = int(np.argmin(fvals))
         best_x = simplex[idx]

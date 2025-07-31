@@ -59,3 +59,7 @@ Using the `NelderMeadOptimizer` in parallel mode::
     opt = NelderMeadOptimizer()
     result = opt.optimize(obj, np.array([2.0, -1.0]), ds, parallel=True)
     print(result.best_x, result.best_f)
+
+The objective function must be picklable when using ``parallel=True``.
+Expect identical numerical results, though start-up overhead means
+parallel execution benefits only expensive objectives.
