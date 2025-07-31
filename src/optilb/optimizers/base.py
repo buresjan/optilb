@@ -14,10 +14,13 @@ from .early_stop import EarlyStopper
 class _CountingFunction:
     func: Callable[[np.ndarray], float]
     optimizer: "Optimizer"
+    last_val: float | None = None
 
     def __call__(self, x: np.ndarray) -> float:
+        val = float(self.func(x))
+        self.last_val = val
         self.optimizer._nfev += 1
-        return float(self.func(x))
+        return val
 
 
 class Optimizer(ABC):
@@ -60,7 +63,7 @@ class Optimizer(ABC):
 
     def _wrap_objective(
         self, objective: Callable[[np.ndarray], float]
-    ) -> Callable[[np.ndarray], float]:
+    ) -> _CountingFunction:
         """Return objective wrapper that increments the evaluation counter."""
 
         return _CountingFunction(func=objective, optimizer=self)

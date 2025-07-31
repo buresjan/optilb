@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Sequence
+from typing import Callable, Sequence, cast
 
 import numpy as np
 from scipy import optimize
@@ -77,7 +77,7 @@ class BFGSOptimizer(Optimizer):
             else:
                 jac = "3-point"
 
-        objective = self._wrap_objective(objective)
+        wrapped_obj = self._wrap_objective(objective)
 
         options: dict[str, float | int | bool] = {
             "maxiter": max_iter,
@@ -94,13 +94,15 @@ class BFGSOptimizer(Optimizer):
         def _callback(xk: np.ndarray) -> None:
             self.record(xk, tag=f"{len(self._history)}")
             if early_stopper is not None:
-                f_val = float(objective(xk))
+                f_val = wrapped_obj.last_val
+                if f_val is None:
+                    f_val = float(wrapped_obj(xk))
                 if early_stopper.update(f_val):
                     raise StopIteration
 
         try:
-            res = optimize.minimize(
-                objective,
+            res = optimize.minimize(  # type: ignore[call-overload]
+                cast(Callable[[np.ndarray], float], wrapped_obj),
                 x0,
                 method="L-BFGS-B",
                 jac=jac,
@@ -111,9 +113,12 @@ class BFGSOptimizer(Optimizer):
         except StopIteration:
             logger.info("Optimization stopped early by callback")
             best = self.history[-1].x
+            best_f = wrapped_obj.last_val
+            if best_f is None:
+                best_f = float(wrapped_obj(best))
             return OptResult(
                 best_x=best,
-                best_f=float(objective(best)),
+                best_f=float(best_f),
                 history=self.history,
                 nfev=self.nfev,
             )
