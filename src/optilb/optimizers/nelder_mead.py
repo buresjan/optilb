@@ -8,7 +8,7 @@ from typing import Callable, Iterable, Sequence
 
 import numpy as np
 
-from ..core import Constraint, DesignSpace, OptResult
+from ..core import Constraint, DesignPoint, DesignSpace, OptResult
 from .base import Optimizer
 from .early_stop import EarlyStopper
 
@@ -26,7 +26,34 @@ else:
         yield
 
 
-# ---------------------------------------------------------------------------
+# ============================ top-level helpers =============================
+
+def _from_unit(u: np.ndarray, lower: np.ndarray, span: np.ndarray) -> np.ndarray:
+    # u in [0,1]^d  -> original space
+    return lower + u * span
+
+
+def _objective_from_unit(
+    u: np.ndarray,
+    objective: Callable[[np.ndarray], float],
+    lower: np.ndarray,
+    span: np.ndarray,
+) -> float:
+    # Wrap objective to accept unit-cube input (picklable: top-level fn + partial)
+    x = _from_unit(np.asarray(u, dtype=float), lower, span)
+    return float(objective(x))
+
+
+def _constraint_from_unit(
+    u: np.ndarray,
+    func: Callable[[np.ndarray], bool | float],
+    lower: np.ndarray,
+    span: np.ndarray,
+) -> bool | float:
+    # Wrap a single constraint to accept unit-cube input (picklable)
+    x = _from_unit(np.asarray(u, dtype=float), lower, span)
+    return func(x)
+
 
 def _evaluate_point(
     x: np.ndarray,
@@ -53,13 +80,17 @@ def _evaluate_point(
 logger = logging.getLogger("optilb")
 
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 
 class NelderMeadOptimizer(Optimizer):
     """(Optionally) parallel Nelder–Mead optimiser.
 
     Set ``parallel=True`` when calling :meth:`optimize` to evaluate independent
     simplex points concurrently with :class:`concurrent.futures.ProcessPoolExecutor`.
+
+    Set ``normalize=True`` to perform the optimisation in the unit hypercube,
+    mapping inputs/outputs accordingly. This makes default step/coefficients
+    scale-independent.
     """
 
     # ------------------------------------------------------------------
@@ -93,8 +124,6 @@ class NelderMeadOptimizer(Optimizer):
         self.n_workers = n_workers
 
     # ------------------------------------------------------------------
-    # helpers
-    # ------------------------------------------------------------------
     def _make_penalised(
         self,
         objective: Callable[[np.ndarray], float],
@@ -122,8 +151,6 @@ class NelderMeadOptimizer(Optimizer):
         return list(executor.map(func, points))
 
     # ------------------------------------------------------------------
-    # main API
-    # ------------------------------------------------------------------
     def optimize(
         self,
         objective: Callable[[np.ndarray], float],
@@ -137,16 +164,54 @@ class NelderMeadOptimizer(Optimizer):
         parallel: bool = False,
         verbose: bool = False,
         early_stopper: EarlyStopper | None = None,
+        normalize: bool = False,
     ) -> OptResult:
         """Run Nelder–Mead optimisation.
 
         If *parallel* is ``True``, reflection, expansion and both contraction
-        candidates are evaluated together each iteration, using up to
-        ``n_workers`` processes.
+        candidates may be evaluated together each iteration, using up to
+        ``n_workers`` processes. When ``normalize=True``, optimisation happens
+        in the unit hypercube and results/history are mapped back.
         """
         if seed is not None:
             np.random.default_rng(seed)
 
+        # -------------------- optional normalisation -------------------
+        # We create picklable wrappers via top-level helpers + partials.
+        original_space = space
+        original_constraints = constraints
+        history_unscale: Callable[[np.ndarray], np.ndarray] | None = None
+
+        if normalize:
+            if np.any(space.upper <= space.lower):
+                raise ValueError("upper must be greater than lower for normalization")
+            lower = space.lower.astype(float)
+            span = (space.upper - space.lower).astype(float)
+
+            def to_unit(x: np.ndarray) -> np.ndarray:
+                return (np.asarray(x, dtype=float) - lower) / span
+
+            def from_unit(u: np.ndarray) -> np.ndarray:
+                return _from_unit(np.asarray(u, dtype=float), lower, span)
+
+            # Wrap objective/constraints for unit space (picklable)
+            objective = partial(_objective_from_unit, objective=objective, lower=lower, span=span)  # type: ignore[assignment]
+            constraints = [
+                Constraint(
+                    func=partial(_constraint_from_unit, func=c.func, lower=lower, span=span),
+                    name=c.name,
+                )
+                for c in constraints
+            ]
+
+            # Replace design space and initial point with unit versions
+            space = DesignSpace(np.zeros(space.dimension), np.ones(space.dimension))
+            x0 = to_unit(x0)
+
+            # history unscale function for post-processing
+            history_unscale = from_unit
+
+        # Normal validation/wrapping continues with possibly replaced `space/objective/x0`
         x0 = self._validate_x0(x0, space)
         objective = self._wrap_objective(objective)
         self.reset_history()
@@ -158,6 +223,8 @@ class NelderMeadOptimizer(Optimizer):
             step = np.full(n, float(step))
         if step.shape != (n,):
             raise ValueError("step must be scalar or of length equal to dimension")
+        # NOTE: do NOT scale `step` by original spans when normalize=True;
+        # in unit space, step means exactly that fraction of [0,1].
 
         penalised = self._make_penalised(objective, space, constraints)
 
@@ -170,7 +237,6 @@ class NelderMeadOptimizer(Optimizer):
             if parallel
             else nullcontext()
         ) as executor:
-
             # initial simplex (N + 1 points)
             simplex = [x0]
             for i in range(n):
@@ -209,9 +275,7 @@ class NelderMeadOptimizer(Optimizer):
                 centroid = np.mean(simplex[:-1], axis=0)
                 worst = simplex[-1]
 
-                # --------------------------------------------------------
                 # Build candidate vertices
-                # --------------------------------------------------------
                 xr = centroid + self.alpha * (centroid - worst)          # reflection
                 xe = centroid + self.gamma * (xr - centroid)             # expansion
                 xoc = centroid + self.beta * (xr - centroid)             # outside contraction
@@ -223,16 +287,14 @@ class NelderMeadOptimizer(Optimizer):
                     )
                 else:
                     fr = self._eval_points(penalised, [xr], executor)[0]
-                    fe = foc = fic = None  # will compute on demand later
+                    fe = foc = fic = None  # compute on demand if needed
 
-                # ------------------ decision tree ----------------------
-                # Case 1: reflected between best and second-worst
+                # Decision tree (textbook Nelder–Mead)
                 if fvals[0] <= fr < fvals[-2]:
                     simplex[-1] = xr
                     fvals[-1] = fr
                     continue
 
-                # Case 2: reflected better than best  → maybe expansion
                 if fr < fvals[0]:
                     if fe is None:
                         fe = self._eval_points(penalised, [xe], executor)[0]
@@ -244,7 +306,6 @@ class NelderMeadOptimizer(Optimizer):
                         fvals[-1] = fr
                     continue
 
-                # Case 3: reflected worse than second-worst but better than worst
                 if fvals[-2] <= fr < fvals[-1]:
                     if foc is None:
                         foc = self._eval_points(penalised, [xoc], executor)[0]
@@ -253,7 +314,6 @@ class NelderMeadOptimizer(Optimizer):
                         fvals[-1] = foc
                         continue
 
-                # Case 4: inside contraction
                 if fic is None:
                     fic = self._eval_points(penalised, [xic], executor)[0]
                 if fic < fvals[-1]:
@@ -261,7 +321,7 @@ class NelderMeadOptimizer(Optimizer):
                     fvals[-1] = fic
                     continue
 
-                # Case 5: shrink the simplex
+                # Shrink
                 new_points = [simplex[0]]
                 for p in simplex[1:]:
                     new_points.append(simplex[0] + self.sigma * (p - simplex[0]))
@@ -273,6 +333,19 @@ class NelderMeadOptimizer(Optimizer):
         idx = int(np.argmin(fvals))
         best_x = simplex[idx]
         best_f = fvals[idx]
+
+        # Map result/history back to original coordinates if we normalized
+        if normalize and history_unscale is not None:
+            best_x = history_unscale(best_x)
+            self._history = [
+                DesignPoint(
+                    x=history_unscale(pt.x),
+                    tag=pt.tag,
+                    timestamp=pt.timestamp,
+                )
+                for pt in self._history
+            ]
+
         return OptResult(
             best_x=best_x,
             best_f=float(best_f),

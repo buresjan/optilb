@@ -12,7 +12,7 @@ from optilb.optimizers import NelderMeadOptimizer
 def slow_obj(x: np.ndarray) -> float:
     """Slow objective used to demonstrate parallel speed-up."""
 
-    return lbm_stub(x, sleep_ms=2000)
+    return lbm_stub(x, sleep_ms=500)
 
 
 def run_demo() -> None:
@@ -24,11 +24,11 @@ def run_demo() -> None:
     opt = NelderMeadOptimizer(n_workers=8)
 
     t0 = time.perf_counter()
-    opt.optimize(slow_obj, x0, ds, max_iter=30, parallel=False)
+    opt.optimize(slow_obj, x0, ds, max_iter=30, parallel=False, normalize=True)
     t_seq = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    opt.optimize(slow_obj, x0, ds, max_iter=30, parallel=True)
+    opt.optimize(slow_obj, x0, ds, max_iter=30, parallel=True, normalize=True)
     t_par = time.perf_counter() - t0
 
     print(f"Sequential time: {t_seq:.2f} s")
