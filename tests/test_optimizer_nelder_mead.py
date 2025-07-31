@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import pytest
 
 from optilb import Constraint, DesignSpace, get_objective
 from optilb.optimizers import EarlyStopper, NelderMeadOptimizer
+
+
+def slow_objective(x: np.ndarray) -> float:
+    time.sleep(0.1)
+    return float(np.sum(x**2))
 
 
 def test_nm_quadratic_dims() -> None:
@@ -36,6 +43,20 @@ def test_nm_parallel() -> None:
     res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=50, parallel=True)
     np.testing.assert_allclose(res.best_x, np.zeros(2), atol=1e-3)
     assert res.best_f == pytest.approx(0.0, abs=1e-6)
+
+
+def test_nm_parallel_speed() -> None:
+    ds = DesignSpace(lower=-1 * np.ones(4), upper=np.ones(4))
+    x0 = np.full(4, 0.5)
+
+    opt = NelderMeadOptimizer()
+    t0 = time.perf_counter()
+    opt.optimize(slow_objective, x0, ds, max_iter=1, parallel=False)
+    t_seq = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    opt.optimize(slow_objective, x0, ds, max_iter=1, parallel=True)
+    t_par = time.perf_counter() - t0
+    assert t_par <= t_seq
 
 
 def test_nm_early_stop_plateau() -> None:
