@@ -38,3 +38,4 @@ See `ROADMAP.md` for planned features and progress.
 - `examples/basic_usage.py` – quick sanity checks.
 - `examples/compare_optimisers.py` – benchmark built-in optimisers on toy objectives.
 - `examples/plot_objectives.py` – visualise 2D objective functions.
+- `examples/parallel_speedup.py` – demonstrate parallel Nelder–Mead speed-up on a slow objective.
