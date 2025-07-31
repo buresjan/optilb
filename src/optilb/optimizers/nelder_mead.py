@@ -3,8 +3,19 @@ from __future__ import annotations
 import logging
 import sys
 from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+from typing import Callable, Iterable, Sequence
 
-# nullcontext is 3.7+.  Provide a tiny shim for 3.6 users.
+import numpy as np
+
+from ..core import Constraint, DesignSpace, OptResult
+from .base import Optimizer
+from .early_stop import EarlyStopper
+
+# ---------------------------------------------------------------------------
+# contextlib.nullcontext exists only from Python 3.7.  Provide a fallback so
+# this file imports cleanly on 3.6.
+# ---------------------------------------------------------------------------
 if sys.version_info >= (3, 7):
     from contextlib import nullcontext  # type: ignore[attr-defined]
 else:
@@ -15,15 +26,7 @@ else:
         yield
 
 
-from functools import partial
-from typing import Callable, Iterable, Sequence
-
-import numpy as np
-
-from ..core import Constraint, DesignSpace, OptResult
-from .base import Optimizer
-from .early_stop import EarlyStopper
-
+# ---------------------------------------------------------------------------
 
 def _evaluate_point(
     x: np.ndarray,
@@ -33,6 +36,7 @@ def _evaluate_point(
     constraints: Sequence[Constraint],
     penalty: float,
 ) -> float:
+    """Evaluate *objective* with bound / constraint penalties."""
     if np.any(x < lower) or np.any(x > upper):
         return penalty
     for c in constraints:
@@ -49,15 +53,16 @@ def _evaluate_point(
 logger = logging.getLogger("optilb")
 
 
-class NelderMeadOptimizer(Optimizer):
-    """Parallel Nelder–Mead optimiser.
+# ---------------------------------------------------------------------------
 
-    The optimiser can evaluate independent simplex points concurrently when
-    :meth:`optimize` is called with ``parallel=True``. Identical numerical
-    results are expected in both modes, although parallel execution incurs a
-    small process startup overhead.
+class NelderMeadOptimizer(Optimizer):
+    """(Optionally) parallel Nelder–Mead optimiser.
+
+    Set ``parallel=True`` when calling :meth:`optimize` to evaluate independent
+    simplex points concurrently with :class:`concurrent.futures.ProcessPoolExecutor`.
     """
 
+    # ------------------------------------------------------------------
     def __init__(
         self,
         *,
@@ -73,6 +78,7 @@ class NelderMeadOptimizer(Optimizer):
         n_workers: int | None = None,
     ) -> None:
         super().__init__()
+
         self.step = step
         self.alpha = alpha
         self.gamma = gamma
@@ -83,9 +89,11 @@ class NelderMeadOptimizer(Optimizer):
         self.no_improv_break = no_improv_break
         self.penalty = penalty
 
-        # NEW: remember worker count so optimize() can pass it to the pool
+        # remember desired worker count for the executor
         self.n_workers = n_workers
 
+    # ------------------------------------------------------------------
+    # helpers
     # ------------------------------------------------------------------
     def _make_penalised(
         self,
@@ -108,10 +116,13 @@ class NelderMeadOptimizer(Optimizer):
         points: Iterable[np.ndarray],
         executor: ProcessPoolExecutor | None,
     ) -> list[float]:
+        """Evaluate *points* either sequentially or in a process pool."""
         if executor is None:
             return [func(p) for p in points]
         return list(executor.map(func, points))
 
+    # ------------------------------------------------------------------
+    # main API
     # ------------------------------------------------------------------
     def optimize(
         self,
@@ -127,19 +138,15 @@ class NelderMeadOptimizer(Optimizer):
         verbose: bool = False,
         early_stopper: EarlyStopper | None = None,
     ) -> OptResult:
-        """Run optimisation.
+        """Run Nelder–Mead optimisation.
 
-        Parameters
-        ----------
-        parallel : bool, optional
-            Evaluate independent simplex points concurrently using a
-            :class:`concurrent.futures.ProcessPoolExecutor`. The objective
-            function must be picklable. Numerical results should match the
-            sequential mode, but parallel execution may be faster when the
-            objective is expensive.
+        If *parallel* is ``True``, reflection, expansion and both contraction
+        candidates are evaluated together each iteration, using up to
+        ``n_workers`` processes.
         """
         if seed is not None:
             np.random.default_rng(seed)
+
         x0 = self._validate_x0(x0, space)
         objective = self._wrap_objective(objective)
         self.reset_history()
@@ -157,11 +164,14 @@ class NelderMeadOptimizer(Optimizer):
         if early_stopper is not None:
             early_stopper.reset()
 
+        # ----------------------------- executor -------------------------
         with (
             ProcessPoolExecutor(max_workers=self.n_workers)
             if parallel
             else nullcontext()
         ) as executor:
+
+            # initial simplex (N + 1 points)
             simplex = [x0]
             for i in range(n):
                 pt = x0.copy()
@@ -172,15 +182,18 @@ class NelderMeadOptimizer(Optimizer):
             best = min(fvals)
             no_improv = 0
 
+            # --------------------- main loop ---------------------------
             for it in range(max_iter):
                 order = np.argsort(fvals)
                 simplex = [simplex[i] for i in order]
                 fvals = [fvals[i] for i in order]
                 current_best = fvals[0]
+
                 self.record(simplex[0], tag=str(it))
                 if verbose:
                     logger.info("%d | best %.6f", it, current_best)
 
+                # early stopping / no-improve logic
                 if early_stopper is None:
                     if best - current_best > tol:
                         best = current_best
@@ -196,18 +209,33 @@ class NelderMeadOptimizer(Optimizer):
                 centroid = np.mean(simplex[:-1], axis=0)
                 worst = simplex[-1]
 
-                # Reflection
-                xr = centroid + self.alpha * (centroid - worst)
-                fr = self._eval_points(penalised, [xr], executor)[0]
+                # --------------------------------------------------------
+                # Build candidate vertices
+                # --------------------------------------------------------
+                xr = centroid + self.alpha * (centroid - worst)          # reflection
+                xe = centroid + self.gamma * (xr - centroid)             # expansion
+                xoc = centroid + self.beta * (xr - centroid)             # outside contraction
+                xic = centroid + self.delta * (worst - centroid)         # inside contraction
 
+                if parallel and executor is not None:
+                    fr, fe, foc, fic = self._eval_points(
+                        penalised, [xr, xe, xoc, xic], executor
+                    )
+                else:
+                    fr = self._eval_points(penalised, [xr], executor)[0]
+                    fe = foc = fic = None  # will compute on demand later
+
+                # ------------------ decision tree ----------------------
+                # Case 1: reflected between best and second-worst
                 if fvals[0] <= fr < fvals[-2]:
                     simplex[-1] = xr
                     fvals[-1] = fr
                     continue
 
+                # Case 2: reflected better than best  → maybe expansion
                 if fr < fvals[0]:
-                    xe = centroid + self.gamma * (xr - centroid)
-                    fe = self._eval_points(penalised, [xe], executor)[0]
+                    if fe is None:
+                        fe = self._eval_points(penalised, [xe], executor)[0]
                     if fe < fr:
                         simplex[-1] = xe
                         fvals[-1] = fe
@@ -216,21 +244,24 @@ class NelderMeadOptimizer(Optimizer):
                         fvals[-1] = fr
                     continue
 
+                # Case 3: reflected worse than second-worst but better than worst
                 if fvals[-2] <= fr < fvals[-1]:
-                    xoc = centroid + self.beta * (xr - centroid)
-                    foc = self._eval_points(penalised, [xoc], executor)[0]
+                    if foc is None:
+                        foc = self._eval_points(penalised, [xoc], executor)[0]
                     if foc <= fr:
                         simplex[-1] = xoc
                         fvals[-1] = foc
                         continue
 
-                xic = centroid + self.delta * (worst - centroid)
-                fic = self._eval_points(penalised, [xic], executor)[0]
+                # Case 4: inside contraction
+                if fic is None:
+                    fic = self._eval_points(penalised, [xic], executor)[0]
                 if fic < fvals[-1]:
                     simplex[-1] = xic
                     fvals[-1] = fic
                     continue
 
+                # Case 5: shrink the simplex
                 new_points = [simplex[0]]
                 for p in simplex[1:]:
                     new_points.append(simplex[0] + self.sigma * (p - simplex[0]))
@@ -238,6 +269,7 @@ class NelderMeadOptimizer(Optimizer):
                 simplex = new_points
                 fvals = [fvals[0]] + list(new_f)
 
+        # -------------------------- done -------------------------------
         idx = int(np.argmin(fvals))
         best_x = simplex[idx]
         best_f = fvals[idx]
