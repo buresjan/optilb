@@ -160,9 +160,6 @@ def make_step_rastrigin(
     return _StepRastrigin(sigma=sigma, seed=seed)
 
 
-Objective = Callable[[np.ndarray], float]
-
-
 def get_objective(name: str, **kwargs) -> Callable[[np.ndarray], float]:
     """Return an objective function by name.
 
