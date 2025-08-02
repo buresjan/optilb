@@ -63,3 +63,7 @@ Using the `NelderMeadOptimizer` in parallel mode::
 The objective function must be picklable when using ``parallel=True``.
 Expect identical numerical results, though start-up overhead means
 parallel execution benefits only expensive objectives.
+
+Setting ``normalize=True`` runs the algorithm in the unit cube and
+scales the inputs/outputs back afterwards.  This makes the default step
+size independent of the original parameter ranges.

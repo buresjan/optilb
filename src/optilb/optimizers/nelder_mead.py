@@ -28,6 +28,7 @@ else:
 
 # ============================ top-level helpers =============================
 
+
 def _from_unit(u: np.ndarray, lower: np.ndarray, span: np.ndarray) -> np.ndarray:
     # u in [0,1]^d  -> original space
     return lower + u * span
@@ -81,6 +82,7 @@ logger = logging.getLogger("optilb")
 
 
 # ===========================================================================
+
 
 class NelderMeadOptimizer(Optimizer):
     """(Optionally) parallel Nelder–Mead optimiser.
@@ -178,8 +180,6 @@ class NelderMeadOptimizer(Optimizer):
 
         # -------------------- optional normalisation -------------------
         # We create picklable wrappers via top-level helpers + partials.
-        original_space = space
-        original_constraints = constraints
         history_unscale: Callable[[np.ndarray], np.ndarray] | None = None
 
         if normalize:
@@ -195,10 +195,20 @@ class NelderMeadOptimizer(Optimizer):
                 return _from_unit(np.asarray(u, dtype=float), lower, span)
 
             # Wrap objective/constraints for unit space (picklable)
-            objective = partial(_objective_from_unit, objective=objective, lower=lower, span=span)  # type: ignore[assignment]
+            objective = partial(
+                _objective_from_unit,
+                objective=objective,
+                lower=lower,
+                span=span,
+            )  # type: ignore[assignment]
             constraints = [
                 Constraint(
-                    func=partial(_constraint_from_unit, func=c.func, lower=lower, span=span),
+                    func=partial(
+                        _constraint_from_unit,
+                        func=c.func,
+                        lower=lower,
+                        span=span,
+                    ),
                     name=c.name,
                 )
                 for c in constraints
@@ -211,7 +221,8 @@ class NelderMeadOptimizer(Optimizer):
             # history unscale function for post-processing
             history_unscale = from_unit
 
-        # Normal validation/wrapping continues with possibly replaced `space/objective/x0`
+        # Normal validation/wrapping continues with possibly replaced
+        # `space/objective/x0`
         x0 = self._validate_x0(x0, space)
         objective = self._wrap_objective(objective)
         self.reset_history()
@@ -276,18 +287,21 @@ class NelderMeadOptimizer(Optimizer):
                 worst = simplex[-1]
 
                 # Build candidate vertices
-                xr = centroid + self.alpha * (centroid - worst)          # reflection
-                xe = centroid + self.gamma * (xr - centroid)             # expansion
-                xoc = centroid + self.beta * (xr - centroid)             # outside contraction
-                xic = centroid + self.delta * (worst - centroid)         # inside contraction
+                xr = centroid + self.alpha * (centroid - worst)  # reflection
+                xe = centroid + self.gamma * (xr - centroid)  # expansion
+                xoc = centroid + self.beta * (xr - centroid)  # outside contraction
+                xic = centroid + self.delta * (worst - centroid)  # inside contraction
 
+                fe: float | None
+                foc: float | None
+                fic: float | None
                 if parallel and executor is not None:
                     fr, fe, foc, fic = self._eval_points(
                         penalised, [xr, xe, xoc, xic], executor
                     )
                 else:
                     fr = self._eval_points(penalised, [xr], executor)[0]
-                    fe = foc = fic = None  # compute on demand if needed
+                    fe = foc = fic = None
 
                 # Decision tree (textbook Nelder–Mead)
                 if fvals[0] <= fr < fvals[-2]:

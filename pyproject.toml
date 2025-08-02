@@ -35,3 +35,4 @@ extend-ignore = ["E203"]
 [tool.mypy]
 python_version = "3.10"
 check_untyped_defs = true
+ignore_missing_imports = true

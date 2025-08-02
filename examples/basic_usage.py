@@ -8,8 +8,8 @@ It should execute without printing anything if all assertions pass.
 """
 
 from optilb.core import DesignPoint, DesignSpace
-from optilb.sampling import lhs
 from optilb.objectives import get_objective
+from optilb.sampling import lhs
 
 # --- core dataclasses -------------------------------------------------------
 
