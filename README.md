@@ -20,6 +20,14 @@ The `PyNomadBBO` package is optional but required for the `MADSOptimizer`::
 
     pip install PyNomadBBO
 
+To enable parallel evaluation of NOMAD trial points, construct the optimiser
+with a desired worker count and set ``parallel=True`` when calling
+``optimize``::
+
+    from optilb.optimizers import MADSOptimizer
+    opt = MADSOptimizer(n_workers=4)
+    result = opt.optimize(obj, x0, ds, parallel=True)
+
 The current codebase provides the core data classes and a Latin-Hypercube
 sampler.  Below is a minimal example::
 

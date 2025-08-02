@@ -8,12 +8,13 @@ provides a derivative‑free alternative.  For additional control over run time,
 you can supply an `EarlyStopper` instance that halts the optimisation when no
 progress is seen::
 
-    from optilb.optimizers import NelderMeadOptimizer, EarlyStopper
+    from optilb.optimizers import EarlyStopper, NelderMeadOptimizer
     stopper = EarlyStopper(patience=5, eps=0.0)
     result = NelderMeadOptimizer().optimize(obj, x0, ds, early_stopper=stopper)
 
 ```python
-from optilb.optimizers import Optimizer, BFGSOptimizer
+from optilb.optimizers import BFGSOptimizer, Optimizer
+
 
 class Dummy(Optimizer):
     def optimize(self, objective, x0, space, constraints=(), **kwargs):
@@ -23,9 +24,10 @@ class Dummy(Optimizer):
 
 Using the provided `BFGSOptimizer`::
 
+    import numpy as np
+
     from optilb import DesignSpace, get_objective
     from optilb.optimizers import BFGSOptimizer
-    import numpy as np
 
     ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
     obj = get_objective("quadratic")
@@ -38,9 +40,10 @@ function evaluations.
 
 Using the `MADSOptimizer` requires the external `PyNomadBBO` package::
 
+    import numpy as np
+
     from optilb import DesignSpace, get_objective
     from optilb.optimizers import MADSOptimizer
-    import numpy as np
 
     ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
     obj = get_objective("quadratic")
@@ -48,11 +51,18 @@ Using the `MADSOptimizer` requires the external `PyNomadBBO` package::
     result = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=50)
     print(result.best_x, result.best_f)
 
+To evaluate poll/search points concurrently, construct the optimiser with a
+desired worker count and pass ``parallel=True``::
+
+    opt = MADSOptimizer(n_workers=4)
+    result = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=50, parallel=True)
+
 Using the `NelderMeadOptimizer` in parallel mode::
+
+    import numpy as np
 
     from optilb import DesignSpace, get_objective
     from optilb.optimizers import NelderMeadOptimizer
-    import numpy as np
 
     ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
     obj = get_objective("quadratic")
