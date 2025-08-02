@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Callable, Sequence
 
 import numpy as np
@@ -18,7 +19,19 @@ logger = logging.getLogger("optilb")
 
 
 class MADSOptimizer(Optimizer):
-    """Local optimiser using NOMAD's Mesh Adaptive Direct Search."""
+    """Local optimiser using NOMAD's Mesh Adaptive Direct Search.
+
+    Parameters
+    ----------
+    n_workers:
+        Desired number of parallel evaluation threads used by NOMAD when
+        ``parallel=True`` in :meth:`optimize`. ``None`` (default) uses all
+        available CPU cores.
+    """
+
+    def __init__(self, *, n_workers: int | None = None) -> None:
+        super().__init__()
+        self.n_workers = n_workers
 
     def optimize(
         self,
@@ -34,6 +47,12 @@ class MADSOptimizer(Optimizer):
         verbose: bool = False,
         early_stopper: EarlyStopper | None = None,
     ) -> OptResult:
+        """Run NOMAD's MADS algorithm.
+
+        Setting ``parallel=True`` lets NOMAD evaluate poll and search trial
+        points concurrently using parallel evaluation threads. The number of
+        threads is controlled by ``n_workers`` passed to the constructor.
+        """
         if PyNomad is None:
             raise ImportError(
                 "PyNOMAD is not installed; please install PyNomadBBO to use"
@@ -45,9 +64,6 @@ class MADSOptimizer(Optimizer):
                 PyNomad.setSeed(seed)
             except Exception:  # pragma: no cover - sanity
                 logger.warning("Failed to set PyNOMAD seed")
-
-        if parallel:
-            logger.info("Parallel execution is not yet supported; running serially")
 
         x0 = self._validate_x0(x0, space)
         objective = self._wrap_objective(objective)
@@ -94,6 +110,10 @@ class MADSOptimizer(Optimizer):
         ]
         if early_stopper is not None and early_stopper.f_target is not None:
             params.append(f"OBJ_TARGET {early_stopper.f_target}")
+
+        if parallel:
+            threads = self.n_workers or os.cpu_count() or 1
+            params.append(f"NB_THREADS_PARALLEL_EVAL {threads}")
 
         res = PyNomad.optimize(
             _bb,
