@@ -32,6 +32,12 @@ def slow_quadratic(x: np.ndarray) -> float:
     return float(np.sum(x**2))
 
 
+def sum_to_one_constraint(x: np.ndarray) -> float:
+    """Constraint enforcing that the coordinates sum to one."""
+
+    return float(x.sum() - 1.0)
+
+
 def run_comparison() -> None:
     """Benchmark optimisers on a slow objective from multiple starts."""
 
@@ -41,7 +47,7 @@ def run_comparison() -> None:
     lower = -5 * np.ones(dim)
     upper = 5 * np.ones(dim)
     space = DesignSpace(lower=lower, upper=upper)
-    constraint = Constraint(lambda x: x.sum() - 1.0)
+    constraint = Constraint(sum_to_one_constraint)
 
     initial_points = [
         np.array([4.0, 4.0]),
