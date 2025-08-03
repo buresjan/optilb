@@ -6,6 +6,7 @@ import warnings
 import numpy as np
 
 from optilb import Constraint, DesignSpace
+from optilb.objectives import lbm_stub
 from optilb.optimizers import (
     BFGSOptimizer,
     EarlyStopper,
@@ -20,16 +21,15 @@ except Exception:  # pragma: no cover - optional dependency
     HAS_MADS = False
 
 
-SLEEP_TIME = 0.05
+SLEEP_TIME = 0.5
 MAX_EVALS = 100
-OPTIMUM = 0.0
+OPTIMUM = -0.1
 
 
 def slow_quadratic(x: np.ndarray) -> float:
     """Quadratic objective with artificial delay."""
 
-    time.sleep(SLEEP_TIME)
-    return float(np.sum(x**2))
+    return lbm_stub(x, sleep_ms=SLEEP_TIME)
 
 
 def sum_to_one_constraint(x: np.ndarray) -> float:
