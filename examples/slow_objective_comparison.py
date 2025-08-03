@@ -109,7 +109,9 @@ def run_comparison() -> None:
             rows.append(
                 {
                     "init_idx": idx,
+                    "init_x": x0.tolist(),
                     "optimizer": name,
+                    "best_x": res.best_x.tolist(),
                     "best_f": res.best_f,
                     "optimum": OPTIMUM,
                     "evals": res.nfev,
