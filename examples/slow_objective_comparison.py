@@ -32,10 +32,10 @@ def slow_quadratic(x: np.ndarray) -> float:
     return lbm_stub(x, sleep_ms=SLEEP_TIME)
 
 
-def sum_to_one_constraint(x: np.ndarray) -> float:
-    """Constraint enforcing that the coordinates sum to one."""
+def box_constraint(x: np.ndarray) -> float:
+    r"""Constraint enforcing :math:`x_i \in [-3, 3]` for all elements."""
 
-    return float(x.sum() - 1.0)
+    return float(np.max(np.abs(x) - 3.0))
 
 
 def run_comparison() -> None:
@@ -47,12 +47,12 @@ def run_comparison() -> None:
     lower = -5 * np.ones(dim)
     upper = 5 * np.ones(dim)
     space = DesignSpace(lower=lower, upper=upper)
-    constraint = Constraint(sum_to_one_constraint)
+    constraint = Constraint(box_constraint)
 
     initial_points = [
-        np.array([4.0, 4.0]),
-        np.array([-4.0, -4.0]),
-        np.array([3.0, -2.0]),
+        np.array([2.0, 2.0]),
+        np.array([-2.0, -2.0]),
+        np.array([2.5, -2.5]),
     ]
 
     configs = [
