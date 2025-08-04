@@ -69,35 +69,72 @@ def run_comparison() -> None:
     constraint = Constraint(box_constraint)
 
     initial_points = [
-        np.array([2.0, 2.0]),
-        np.array([-2.0, -2.0]),
-        np.array([2.5, -2.5]),
+        # 🔹 Baseline cluster around [-2.0, -2.0]
+        np.array([-2.00, -2.00]),
+        np.array([-2.01, -1.91]),
+        np.array([-1.95, -2.05]),
+
+        # 🔹 Slight perturbations (±0.05)
+        np.array([-2.05, -2.00]),
+        np.array([-2.00, -1.95]),
+        np.array([-1.95, -1.95]),
+        np.array([-2.05, -2.05]),
+
+        # 🔹 Medium perturbations (±0.2)
+        np.array([-2.20, -2.00]),
+        np.array([-2.00, -2.20]),
+        np.array([-1.80, -2.00]),
+        np.array([-2.00, -1.80]),
+        np.array([-1.80, -1.80]),
+
+        # 🔹 Diagonal & off-axis directions
+        np.array([-1.9, -2.1]),
+        np.array([-2.1, -1.9]),
+        np.array([-2.1, -2.1]),
+        np.array([-1.9, -1.9]),
+
+        # 🔹 Points approaching the optimum basin
+        np.array([-1.0, -1.0]),
+        np.array([-0.75, 0.25]),
+        np.array([-0.6, 0.4]),
+        np.array([-0.5, 0.5]),
+
+        # 🔹 Points near the true optimum
+        np.array([-0.48, 0.53]),
+        np.array([-0.50, 0.50]),
+        np.array([-0.47, 0.54]),
+
+        # 🔹 Random exploratory points (stable seed recommended)
+        np.array([ 2.0,  2.0]),
+        np.array([-2.5,  2.5]),
+        np.array([ 1.5, -1.5]),
+        np.array([-2.9,  0.0]),
     ]
 
     configs = [
-        ("BFGS", BFGSOptimizer(n_workers=4), False, {}),
-        ("BFGS (parallel)", BFGSOptimizer(n_workers=4), True, {}),
+        ("BFGS", BFGSOptimizer(n_workers=8), False, {}),
+        ("BFGS (parallel)", BFGSOptimizer(n_workers=8), True, {}),
         (
             "Nelder-Mead",
-            NelderMeadOptimizer(n_workers=4),
+            NelderMeadOptimizer(n_workers=8),
             False,
             {"normalize": False},
         ),
         (
             "Nelder-Mead (parallel)",
-            NelderMeadOptimizer(n_workers=4),
+            NelderMeadOptimizer(n_workers=8),
             True,
             {"normalize": False},
         ),
         (
             "Nelder-Mead (normalised)",
-            NelderMeadOptimizer(n_workers=4),
+            NelderMeadOptimizer(n_workers=8),
             False,
             {"normalize": True},
         ),
         (
             "Nelder-Mead (parallel, normalised)",
-            NelderMeadOptimizer(n_workers=4),
+            NelderMeadOptimizer(n_workers=8),
             True,
             {"normalize": True},
         ),
@@ -106,8 +143,8 @@ def run_comparison() -> None:
     if HAS_MADS:
         configs.extend(
             [
-                ("MADS", MADSOptimizer(n_workers=4), False, {}),
-                ("MADS (parallel)", MADSOptimizer(n_workers=4), True, {}),
+                ("MADS", MADSOptimizer(n_workers=8), False, {}),
+                ("MADS (parallel)", MADSOptimizer(n_workers=8), True, {}),
             ]
         )
     else:  # pragma: no cover - optional dependency
