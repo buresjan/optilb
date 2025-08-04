@@ -4,6 +4,7 @@ import pickle
 from datetime import datetime, timezone
 
 import numpy as np
+import pytest
 
 from optilb import Constraint, DesignPoint, DesignSpace, OptResult
 
@@ -16,6 +17,11 @@ def test_designspace_equality_and_pickle() -> None:
     assert ds1 == ds2
     ds3 = pickle.loads(pickle.dumps(ds1))
     assert ds1 == ds3
+
+
+def test_designspace_invalid_bounds() -> None:
+    with pytest.raises(ValueError, match="Lower bounds must not exceed upper bounds"):
+        DesignSpace(lower=[1.0, 0.0], upper=[0.0, 1.0])
 
 
 def test_designpoint_equality_and_pickle() -> None:
