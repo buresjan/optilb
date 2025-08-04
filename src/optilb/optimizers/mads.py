@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
 try:
     import PyNomad
 except ImportError:  # pragma: no cover - optional dependency
-    PyNomad = None  # type: ignore
+    PyNomad = None
 
 from ..core import Constraint, DesignSpace, OptResult
 from .base import Optimizer
@@ -90,7 +90,7 @@ class MADSOptimizer(Optimizer):
 
             con_funcs.append(_wrap(c.func))
 
-        def _bb(point: "PyNomad.PyNomadEvalPoint") -> int:  # type: ignore[name-defined]
+        def _bb(point: Any) -> int:
             arr = np.array(
                 [point.get_coord(i) for i in range(point.size())], dtype=float
             )

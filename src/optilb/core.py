@@ -29,7 +29,7 @@ class DesignSpace:
     def dimension(self) -> int:
         return int(self.lower.size)
 
-    def __eq__(self, other: object) -> bool:  # type: ignore[override]
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, DesignSpace):
             return False
         return (
@@ -50,7 +50,7 @@ class DesignPoint:
     def __post_init__(self) -> None:
         object.__setattr__(self, "x", np.asarray(self.x, dtype=float))
 
-    def __eq__(self, other: object) -> bool:  # type: ignore[override]
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, DesignPoint):
             return False
         return (
@@ -86,7 +86,7 @@ class OptResult:
         if not isinstance(self.history, tuple):
             object.__setattr__(self, "history", tuple(self.history))
 
-    def __eq__(self, other: object) -> bool:  # type: ignore[override]
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, OptResult):
             return False
         return (

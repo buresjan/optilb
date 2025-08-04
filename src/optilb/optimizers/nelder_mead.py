@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-import sys
 from concurrent.futures import ProcessPoolExecutor
+from contextlib import nullcontext
 from functools import partial
-from typing import Callable, Iterable, Sequence
+from typing import Callable, Iterable, Sequence, cast
 
 import numpy as np
 
@@ -12,26 +12,13 @@ from ..core import Constraint, DesignPoint, DesignSpace, OptResult
 from .base import Optimizer
 from .early_stop import EarlyStopper
 
-# ---------------------------------------------------------------------------
-# contextlib.nullcontext exists only from Python 3.7.  Provide a fallback so
-# this file imports cleanly on 3.6.
-# ---------------------------------------------------------------------------
-if sys.version_info >= (3, 7):
-    from contextlib import nullcontext  # type: ignore[attr-defined]
-else:
-    from contextlib import contextmanager
-
-    @contextmanager
-    def nullcontext():
-        yield
-
 
 # ============================ top-level helpers =============================
 
 
 def _from_unit(u: np.ndarray, lower: np.ndarray, span: np.ndarray) -> np.ndarray:
     # u in [0,1]^d  -> original space
-    return lower + u * span
+    return cast(np.ndarray, lower + u * span)
 
 
 def _objective_from_unit(
@@ -200,18 +187,21 @@ class NelderMeadOptimizer(Optimizer):
             span = (space.upper - space.lower).astype(float)
 
             def to_unit(x: np.ndarray) -> np.ndarray:
-                return (np.asarray(x, dtype=float) - lower) / span
+                return cast(np.ndarray, (np.asarray(x, dtype=float) - lower) / span)
 
             def from_unit(u: np.ndarray) -> np.ndarray:
                 return _from_unit(np.asarray(u, dtype=float), lower, span)
 
             # Wrap objective/constraints for unit space (picklable)
-            objective = partial(
-                _objective_from_unit,
-                objective=objective,
-                lower=lower,
-                span=span,
-            )  # type: ignore[assignment]
+            objective = cast(
+                Callable[[np.ndarray], float],
+                partial(
+                    _objective_from_unit,
+                    objective=objective,
+                    lower=lower,
+                    span=span,
+                ),
+            )
             constraints = [
                 Constraint(
                     func=partial(

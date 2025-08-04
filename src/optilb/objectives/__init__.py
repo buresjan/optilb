@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 
@@ -160,7 +160,7 @@ def make_step_rastrigin(
     return _StepRastrigin(sigma=sigma, seed=seed)
 
 
-def get_objective(name: str, **kwargs) -> Callable[[np.ndarray], float]:
+def get_objective(name: str, **kwargs: Any) -> Callable[[np.ndarray], float]:
     """Return an objective function by name.
 
     Args:
