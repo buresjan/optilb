@@ -7,6 +7,7 @@ optilb Documentation
 
    sampling
    objectives
+   optimizers
    api/sampling
    api/objectives
    api/optimizers

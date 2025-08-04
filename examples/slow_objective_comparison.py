@@ -73,42 +73,36 @@ def run_comparison() -> None:
         np.array([-2.00, -2.00]),
         np.array([-2.01, -1.91]),
         np.array([-1.95, -2.05]),
-
         # 🔹 Slight perturbations (±0.05)
         np.array([-2.05, -2.00]),
         np.array([-2.00, -1.95]),
         np.array([-1.95, -1.95]),
         np.array([-2.05, -2.05]),
-
         # 🔹 Medium perturbations (±0.2)
         np.array([-2.20, -2.00]),
         np.array([-2.00, -2.20]),
         np.array([-1.80, -2.00]),
         np.array([-2.00, -1.80]),
         np.array([-1.80, -1.80]),
-
         # 🔹 Diagonal & off-axis directions
         np.array([-1.9, -2.1]),
         np.array([-2.1, -1.9]),
         np.array([-2.1, -2.1]),
         np.array([-1.9, -1.9]),
-
         # 🔹 Points approaching the optimum basin
         np.array([-1.0, -1.0]),
         np.array([-0.75, 0.25]),
         np.array([-0.6, 0.4]),
         np.array([-0.5, 0.5]),
-
         # 🔹 Points near the true optimum
         np.array([-0.48, 0.53]),
         np.array([-0.50, 0.50]),
         np.array([-0.47, 0.54]),
-
         # 🔹 Random exploratory points (stable seed recommended)
-        np.array([ 2.0,  2.0]),
-        np.array([-2.5,  2.5]),
-        np.array([ 1.5, -1.5]),
-        np.array([-2.9,  0.0]),
+        np.array([2.0, 2.0]),
+        np.array([-2.5, 2.5]),
+        np.array([1.5, -1.5]),
+        np.array([-2.9, 0.0]),
     ]
 
     configs = [
@@ -156,7 +150,7 @@ def run_comparison() -> None:
         for name, opt, parallel, extra in configs:
             stopper = EarlyStopper(eps=1e-6, patience=10, enabled=True)
             t0 = time.perf_counter()
-            kwargs = dict(extra)
+            kwargs: dict[str, object] = dict(extra)
             if isinstance(opt, NelderMeadOptimizer):
                 kwargs.setdefault(
                     "max_iter", _nm_iters_for_budget(dim, MAX_EVALS, parallel)

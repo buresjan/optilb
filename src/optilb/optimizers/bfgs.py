@@ -117,7 +117,7 @@ class BFGSOptimizer(Optimizer):
         # Numerical gradient setup (central differences with bounds handling)
         # ------------------------------------------------------------------
         use_central = False
-        _executor = None  # type: ignore[assignment]
+        _executor: ThreadPoolExecutor | None = None
         if jac is None:
             fd_eps = self.fd_eps
             if fd_eps is None and self.step is not None:
@@ -198,7 +198,7 @@ class BFGSOptimizer(Optimizer):
             with (
                 ThreadPoolExecutor(max_workers=_workers) if _workers else nullcontext()
             ) as _executor:
-                res = optimize.minimize(  # type: ignore[call-overload]
+                res = optimize.minimize(
                     cast(Callable[[np.ndarray], float], wrapped_obj),
                     x0,
                     method="L-BFGS-B",
