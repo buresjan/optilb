@@ -26,6 +26,25 @@ MAX_EVALS = 100
 OPTIMUM = -2.0
 
 
+def _nm_iters_for_budget(dim: int, budget: int, parallel: bool) -> int:
+    """Return ``max_iter`` keeping Nelder–Mead evaluations ``≤ budget``.
+
+    Nelder–Mead evaluates ``dim + 1`` points for the initial simplex.  Each
+    subsequent iteration may evaluate up to ``dim + 4`` points when running in
+    parallel (reflection, expansion/outside/inside contractions and potential
+    shrink).  The sequential variant uses at most ``dim + 2`` evaluations per
+    iteration.  This helper converts a global evaluation budget into a safe
+    iteration cap.
+    """
+
+    initial = dim + 1
+    remaining = budget - initial
+    if remaining <= 0:
+        return 1
+    per_iter = dim + (4 if parallel else 2)
+    return max(1, remaining // per_iter)
+
+
 def slow_quadratic(x: np.ndarray) -> float:
     """Quadratic objective with artificial delay."""
 
@@ -58,22 +77,27 @@ def run_comparison() -> None:
     configs = [
         ("BFGS", BFGSOptimizer(n_workers=4), False, {}),
         ("BFGS (parallel)", BFGSOptimizer(n_workers=4), True, {}),
-        ("Nelder-Mead", NelderMeadOptimizer(), False, {"normalize": False}),
+        (
+            "Nelder-Mead",
+            NelderMeadOptimizer(n_workers=4),
+            False,
+            {"normalize": False},
+        ),
         (
             "Nelder-Mead (parallel)",
-            NelderMeadOptimizer(),
+            NelderMeadOptimizer(n_workers=4),
             True,
             {"normalize": False},
         ),
         (
             "Nelder-Mead (normalised)",
-            NelderMeadOptimizer(),
+            NelderMeadOptimizer(n_workers=4),
             False,
             {"normalize": True},
         ),
         (
             "Nelder-Mead (parallel, normalised)",
-            NelderMeadOptimizer(),
+            NelderMeadOptimizer(n_workers=4),
             True,
             {"normalize": True},
         ),
@@ -82,8 +106,8 @@ def run_comparison() -> None:
     if HAS_MADS:
         configs.extend(
             [
-                ("MADS", MADSOptimizer(), False, {}),
-                ("MADS (parallel)", MADSOptimizer(), True, {}),
+                ("MADS", MADSOptimizer(n_workers=4), False, {}),
+                ("MADS (parallel)", MADSOptimizer(n_workers=4), True, {}),
             ]
         )
     else:  # pragma: no cover - optional dependency
@@ -95,15 +119,21 @@ def run_comparison() -> None:
         for name, opt, parallel, extra in configs:
             stopper = EarlyStopper(eps=1e-6, patience=10, enabled=True)
             t0 = time.perf_counter()
+            kwargs = dict(extra)
+            if isinstance(opt, NelderMeadOptimizer):
+                kwargs.setdefault(
+                    "max_iter", _nm_iters_for_budget(dim, MAX_EVALS, parallel)
+                )
+            else:
+                kwargs.setdefault("max_iter", MAX_EVALS)
             res = opt.optimize(
                 slow_quadratic,
                 x0,
                 space,
                 constraints=[constraint],
-                max_iter=MAX_EVALS,
                 parallel=parallel,
                 early_stopper=stopper,
-                **extra,
+                **kwargs,
             )
             dt = time.perf_counter() - t0
             rows.append(

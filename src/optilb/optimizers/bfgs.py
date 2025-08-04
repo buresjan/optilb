@@ -3,17 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
-
-try:  # nullcontext for py<3.7
-    from contextlib import nullcontext  # type: ignore[attr-defined]
-except Exception:
-    from contextlib import contextmanager
-
-    @contextmanager
-    def nullcontext():
-        yield
-
-
+from contextlib import nullcontext
 from typing import Callable, Sequence, cast
 
 import numpy as np

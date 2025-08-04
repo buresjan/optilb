@@ -58,10 +58,18 @@ def run_benchmark() -> None:
             space = DesignSpace(lower=lower, upper=upper)
             x0 = np.full(dim, 3.0)
             configs = [
-                ("BFGS", BFGSOptimizer(), False),
-                ("MADS", MADSOptimizer() if HAS_MADS else None, False),
-                ("Nelder-Mead", NelderMeadOptimizer(), False),
-                ("Nelder-Mead (parallel)", NelderMeadOptimizer(), True),
+                ("BFGS", BFGSOptimizer(n_workers=4), False),
+                (
+                    "MADS",
+                    MADSOptimizer(n_workers=4) if HAS_MADS else None,
+                    False,
+                ),
+                ("Nelder-Mead", NelderMeadOptimizer(n_workers=4), False),
+                (
+                    "Nelder-Mead (parallel)",
+                    NelderMeadOptimizer(n_workers=4),
+                    True,
+                ),
             ]
             for name, opt, parallel in configs:
                 if opt is None:
