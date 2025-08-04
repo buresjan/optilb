@@ -20,6 +20,8 @@ class DesignSpace:
         object.__setattr__(self, "upper", np.asarray(self.upper, dtype=float))
         if self.lower.shape != self.upper.shape:
             raise ValueError("Lower and upper bounds must have the same shape")
+        if np.any(self.lower > self.upper):
+            raise ValueError("Lower bounds must not exceed upper bounds")
         if self.names is not None and len(self.names) != self.lower.size:
             raise ValueError("Number of names must match dimension")
 
