@@ -21,15 +21,15 @@ except Exception:  # pragma: no cover - optional dependency
     HAS_MADS = False
 
 
-SLEEP_TIME = 0.5
+SLEEP_TIME = 500
 MAX_EVALS = 100
-OPTIMUM = -0.1
+OPTIMUM = -2.0
 
 
 def slow_quadratic(x: np.ndarray) -> float:
     """Quadratic objective with artificial delay."""
 
-    return lbm_stub(x, sleep_ms=SLEEP_TIME)
+    return -lbm_stub(x, sleep_ms=SLEEP_TIME)
 
 
 def box_constraint(x: np.ndarray) -> float:
