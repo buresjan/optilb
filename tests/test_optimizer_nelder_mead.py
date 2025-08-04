@@ -76,3 +76,12 @@ def test_nm_nfev() -> None:
     res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=20)
     assert res.nfev == opt.nfev
     assert res.nfev >= len(res.history)
+
+
+def test_nm_parallel_nfev() -> None:
+    ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
+    obj = get_objective("quadratic")
+    opt = NelderMeadOptimizer()
+    res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=20, parallel=True)
+    assert res.nfev == opt.nfev
+    assert res.nfev >= len(res.history) > 0

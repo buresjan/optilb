@@ -147,10 +147,21 @@ class NelderMeadOptimizer(Optimizer):
         points: Iterable[np.ndarray],
         executor: ProcessPoolExecutor | None,
     ) -> list[float]:
-        """Evaluate *points* either sequentially or in a process pool."""
+        """Evaluate *points* either sequentially or in a process pool.
+
+        When running in parallel, the wrapped objective's internal evaluation
+        counter (``self._nfev``) lives in a separate process and therefore
+        cannot be updated directly.  We manually bump the counter based on the
+        number of points evaluated so that ``nfev`` reflects the true cost of
+        the optimisation run.
+        """
+
+        pts = list(points)
         if executor is None:
-            return [func(p) for p in points]
-        return list(executor.map(func, points))
+            return [func(p) for p in pts]
+        result = list(executor.map(func, pts))
+        self._nfev += len(pts)
+        return result
 
     # ------------------------------------------------------------------
     def optimize(
