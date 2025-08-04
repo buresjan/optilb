@@ -28,6 +28,10 @@ with a desired worker count and set ``parallel=True`` when calling
     opt = MADSOptimizer(n_workers=4)
     result = opt.optimize(obj, x0, ds, parallel=True)
 
+`BFGSOptimizer` and `NelderMeadOptimizer` expose the same ``n_workers`` keyword
+to bound the number of threads or processes used for parallel finite
+difference/vertex evaluations.
+
 The current codebase provides the core data classes and a Latin-Hypercube
 sampler.  Below is a minimal example::
 

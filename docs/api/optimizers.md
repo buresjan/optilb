@@ -35,6 +35,12 @@ Using the provided `BFGSOptimizer`::
     result = opt.optimize(obj, np.array([3.0, -2.0]), ds)
     print(result.best_x, result.best_f)
 
+To evaluate finite-difference gradients in parallel::
+
+    opt = BFGSOptimizer(n_workers=4)
+    result = opt.optimize(obj, np.array([3.0, -2.0]), ds, parallel=True)
+    print(result.best_x, result.best_f)
+
 The returned `OptResult` also records `nfev`, the total number of objective
 function evaluations.
 
@@ -66,13 +72,17 @@ Using the `NelderMeadOptimizer` in parallel mode::
 
     ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
     obj = get_objective("quadratic")
-    opt = NelderMeadOptimizer()
+    opt = NelderMeadOptimizer(n_workers=4)
     result = opt.optimize(obj, np.array([2.0, -1.0]), ds, parallel=True)
     print(result.best_x, result.best_f)
 
 The objective function must be picklable when using ``parallel=True``.
 Expect identical numerical results, though start-up overhead means
 parallel execution benefits only expensive objectives.
+
+All optimisers that support parallel execution accept an ``n_workers`` keyword
+argument to limit the number of processes or threads used.  If omitted, the
+default is to utilise all available CPU cores.
 
 Setting ``normalize=True`` runs the algorithm in the unit cube and
 scales the inputs/outputs back afterwards.  This makes the default step
