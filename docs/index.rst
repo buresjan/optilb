@@ -11,4 +11,5 @@ optilb Documentation
    api/sampling
    api/objectives
    api/optimizers
+   changelog
 
