@@ -139,6 +139,18 @@ def run_comparison() -> None:
             [
                 ("MADS", MADSOptimizer(n_workers=8), False, {}),
                 ("MADS (parallel)", MADSOptimizer(n_workers=8), True, {}),
+                (
+                    "MADS (normalised)",
+                    MADSOptimizer(n_workers=8),
+                    False,
+                    {"normalize": True},
+                ),
+                (
+                    "MADS (parallel, normalised)",
+                    MADSOptimizer(n_workers=8),
+                    True,
+                    {"normalize": True},
+                ),
             ]
         )
     else:  # pragma: no cover - optional dependency
