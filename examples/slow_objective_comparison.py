@@ -5,7 +5,7 @@ import warnings
 
 import numpy as np
 
-from optilb import Constraint, DesignSpace
+from optilb import DesignSpace
 from optilb.objectives import lbm_stub
 from optilb.optimizers import (
     BFGSOptimizer,
@@ -51,22 +51,15 @@ def slow_quadratic(x: np.ndarray) -> float:
     return -lbm_stub(x, sleep_ms=SLEEP_TIME)
 
 
-def box_constraint(x: np.ndarray) -> float:
-    r"""Constraint enforcing :math:`x_i \in [-3, 3]` for all elements."""
-
-    return float(np.max(np.abs(x) - 3.0))
-
-
 def run_comparison() -> None:
     """Benchmark optimisers on a slow objective from multiple starts."""
 
     import pandas as pd  # local import to avoid hard dependency
 
     dim = 2
-    lower = -5 * np.ones(dim)
-    upper = 5 * np.ones(dim)
+    lower = -3 * np.ones(dim)
+    upper = 3 * np.ones(dim)
     space = DesignSpace(lower=lower, upper=upper)
-    constraint = Constraint(box_constraint)
 
     initial_points = [
         # 🔹 Baseline cluster around [-2.0, -2.0]
@@ -173,7 +166,6 @@ def run_comparison() -> None:
                 slow_quadratic,
                 x0,
                 space,
-                constraints=[constraint],
                 parallel=parallel,
                 early_stopper=stopper,
                 **kwargs,
