@@ -54,8 +54,13 @@ Using the `MADSOptimizer` requires the external `PyNomadBBO` package::
     ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
     obj = get_objective("quadratic")
     opt = MADSOptimizer()
-    result = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=50)
+    result = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=50, normalize=True)
     print(result.best_x, result.best_f)
+
+Passing ``normalize=True`` maps the NOMAD search to the unit cube and
+unscales points before calling the objective or constraints.  Bounds must
+be finite and non-degenerate.  History and results are reported in the
+original coordinates.
 
 To evaluate poll/search points concurrently, construct the optimiser with a
 desired worker count and pass ``parallel=True``::
@@ -84,6 +89,7 @@ All optimisers that support parallel execution accept an ``n_workers`` keyword
 argument to limit the number of processes or threads used.  If omitted, the
 default is to utilise all available CPU cores.
 
-Setting ``normalize=True`` runs the algorithm in the unit cube and
-scales the inputs/outputs back afterwards.  This makes the default step
-size independent of the original parameter ranges.
+Both :class:`~optilb.optimizers.NelderMeadOptimizer` and
+:class:`~optilb.optimizers.MADSOptimizer` accept ``normalize=True`` to run in
+the unit hypercube and scale results back afterwards.  This makes default step
+sizes independent of the original parameter ranges.

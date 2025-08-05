@@ -17,7 +17,7 @@ Built-in optimizers:
 
 - `BFGSOptimizer` – wraps SciPy's L-BFGS-B for smooth objectives.
 - `NelderMeadOptimizer` – supports optional parallel evaluation and normalisation.
-- `MADSOptimizer` – binds to NOMAD's Mesh Adaptive Direct Search (requires PyNomadBBO).
+- `MADSOptimizer` – binds to NOMAD's Mesh Adaptive Direct Search (requires PyNomadBBO) and can normalise the search space with ``normalize=True`` (requires finite, non-degenerate bounds and reports results in the original coordinates).
 - `EarlyStopper` – utility to halt optimisation when progress stalls.
 
 All optimizers accept `n_workers` to control parallel execution where applicable.

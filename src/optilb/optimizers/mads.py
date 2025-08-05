@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Literal, Sequence
 
 import numpy as np
 
@@ -16,6 +16,27 @@ from .base import Optimizer
 from .early_stop import EarlyStopper
 
 logger = logging.getLogger("optilb")
+
+
+def _validate_bounds(lb: np.ndarray, ub: np.ndarray) -> None:
+    """Ensure bounds are finite and non-degenerate."""
+
+    if not (np.all(np.isfinite(lb)) and np.all(np.isfinite(ub)) and np.all(ub > lb)):
+        raise ValueError(
+            "normalize=True requires finite, non-degenerate bounds for all variables"
+        )
+
+
+def _to_unit(x: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> np.ndarray:
+    """Map ``x`` from original space to the unit cube."""
+
+    return (np.asarray(x, dtype=float) - lb) / (ub - lb)
+
+
+def _from_unit(u: np.ndarray, lb: np.ndarray, ub: np.ndarray) -> np.ndarray:
+    """Map unit cube ``u`` back to the original space."""
+
+    return lb + np.asarray(u, dtype=float) * (ub - lb)
 
 
 class MADSOptimizer(Optimizer):
@@ -46,12 +67,28 @@ class MADSOptimizer(Optimizer):
         parallel: bool = False,
         verbose: bool = False,
         early_stopper: EarlyStopper | None = None,
+        normalize: bool = False,
+        normalization_mode: Literal["unit"] = "unit",
     ) -> OptResult:
         """Run NOMAD's MADS algorithm.
 
         Setting ``parallel=True`` lets NOMAD evaluate poll and search trial
         points concurrently using parallel evaluation threads. The number of
         threads is controlled by ``n_workers`` passed to the constructor.
+
+        When ``normalize=True``, the optimiser operates in the unit cube,
+        unscaling points before calling the user objective and constraints.
+        History and returned results are reported in the original space.
+
+        Parameters
+        ----------
+        normalize:
+            Map the search space to ``[0, 1]^n`` before optimisation. Requires
+            finite, non-degenerate bounds. Objective and constraint callbacks
+            receive points in the original space; ``best_x`` and ``history`` are
+            also reported in the original coordinates.
+        normalization_mode:
+            Normalisation strategy. Only ``"unit"`` is supported.
         """
         if PyNomad is None:
             raise ImportError(
@@ -64,36 +101,73 @@ class MADSOptimizer(Optimizer):
                 PyNomad.setSeed(seed)
             except Exception:  # pragma: no cover - sanity
                 logger.warning("Failed to set PyNOMAD seed")
+        self._history_scaled = None
+
+        dim = space.dimension
+        lower = space.lower.astype(float)
+        upper = space.upper.astype(float)
+        if normalize:
+            if normalization_mode != "unit":
+                raise ValueError("Only 'unit' normalization is supported")
+            _validate_bounds(lower, upper)
 
         x0 = self._validate_x0(x0, space)
-        objective = self._wrap_objective(objective)
         self.reset_history()
         self.record(x0, tag="start")
         if early_stopper is not None:
             early_stopper.reset()
 
-        dim = space.dimension
+        history_scaled: list[np.ndarray] | None = None
+        user_objective = objective
+
+        if normalize:
+            x0_unit = _to_unit(x0, lower, upper)
+            history_scaled = []
+
+            def _unscale(u: np.ndarray) -> np.ndarray:
+                return _from_unit(u, lower, upper)
+
+            def objective_unit(u: np.ndarray) -> float:
+                return float(user_objective(_unscale(u)))
+
+            space = DesignSpace(np.zeros(dim), np.ones(dim))
+            x0 = x0_unit
+        else:
+
+            def _unscale(u: np.ndarray) -> np.ndarray:
+                return u
+
+            def objective_unit(u: np.ndarray) -> float:
+                return float(user_objective(u))
+
+        x0 = self._validate_x0(x0, space)
+        objective = self._wrap_objective(objective_unit)
 
         con_funcs: list[Callable[[np.ndarray], float]] = []
         for c in constraints:
 
-            def _wrap(
-                func: Callable[[np.ndarray], bool | float],
-            ) -> Callable[[np.ndarray], float]:
-                def _inner(arr: np.ndarray) -> float:
-                    val = func(arr)
-                    if isinstance(val, bool):
-                        return 0.0 if val else 1.0
-                    return float(val)
+            def _inner(u: np.ndarray, func=c.func) -> float:
+                val = func(_unscale(u))
+                if isinstance(val, bool):
+                    return 0.0 if val else 1.0
+                return float(val)
 
-                return _inner
+            con_funcs.append(_inner)
 
-            con_funcs.append(_wrap(c.func))
+        first_eval = True
 
         def _bb(point: Any) -> int:
+            nonlocal first_eval
             arr = np.array(
                 [point.get_coord(i) for i in range(point.size())], dtype=float
             )
+            x_orig = _unscale(arr)
+            if first_eval:
+                first_eval = False
+            else:
+                self.record(x_orig)
+                if history_scaled is not None:
+                    history_scaled.append(arr.copy())
             fval = float(objective(arr))
             vals = [fval]
             for g in con_funcs:
@@ -123,6 +197,11 @@ class MADSOptimizer(Optimizer):
             params,
         )
         best = np.array(res["x_best"], dtype=float)
+        if normalize:
+            best = _unscale(best)
+            self._history_scaled = history_scaled
+        else:
+            self._history_scaled = None
         best_f = float(res["f_best"])
         return OptResult(
             best_x=best,

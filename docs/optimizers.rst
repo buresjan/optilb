@@ -18,7 +18,7 @@ Available optimizers:
 
 * :class:`optilb.optimizers.BFGSOptimizer` – wraps SciPy's L-BFGS-B for smooth objectives.
 * :class:`optilb.optimizers.NelderMeadOptimizer` – supports optional parallel evaluation and normalisation.
-* :class:`optilb.optimizers.MADSOptimizer` – interfaces with NOMAD's Mesh Adaptive Direct Search (requires ``PyNomadBBO``).
+* :class:`optilb.optimizers.MADSOptimizer` – interfaces with NOMAD's Mesh Adaptive Direct Search (requires ``PyNomadBBO``) and can normalise the search space with ``normalize=True`` (requires finite, non-degenerate bounds and reports results in the original coordinates).
 * :class:`optilb.optimizers.EarlyStopper` – utility to halt optimisation when progress stalls.
 
 All optimizers that support parallel execution accept an ``n_workers`` keyword to limit resource usage.
