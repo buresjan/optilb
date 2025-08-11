@@ -37,14 +37,17 @@ def lhs(
     rng = np.random.default_rng(seed)
 
     if centered:
-        scramble = False
-
-    sampler = qmc.LatinHypercube(
-        d=design_space.dimension,
-        scramble=scramble,
-        rng=rng,
-    )
-    sample = sampler.random(n=sample_count)
+        sample = np.empty((sample_count, design_space.dimension))
+        for j in range(design_space.dimension):
+            perm = rng.permutation(sample_count)
+            sample[:, j] = (perm + 0.5) / sample_count
+    else:
+        sampler = qmc.LatinHypercube(
+            d=design_space.dimension,
+            scramble=scramble,
+            rng=rng,
+        )
+        sample = sampler.random(n=sample_count)
     scaled = qmc.scale(sample, design_space.lower, design_space.upper)
 
     # Round integers if bounds are integers
