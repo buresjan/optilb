@@ -117,8 +117,10 @@ class BFGSOptimizer(Optimizer):
             "maxiter": max_iter,
             "ftol": tol,
             "gtol": tol,
-            "disp": verbose,
         }
+
+        if verbose:
+            logger.info("Starting L-BFGS-B optimisation with max_iter=%s", max_iter)
 
         if early_stopper is not None:
             early_stopper.reset()
@@ -259,6 +261,9 @@ class BFGSOptimizer(Optimizer):
                 history=self.history,
                 nfev=self.nfev,
             )
+
+        if verbose:
+            logger.info("SciPy optimisation finished: %s", res.message)
 
         if res.status != 0:
             logger.warning("SciPy optimisation did not converge: %s", res.message)
