@@ -9,9 +9,10 @@ from typing import Callable, Sequence, cast
 import numpy as np
 from scipy import optimize
 
-from ..core import Constraint, DesignSpace, OptResult
+from ..core import Constraint, DesignPoint, DesignSpace, OptResult
 from .base import Optimizer
 from .early_stop import EarlyStopper
+from .utils import SpaceTransform
 
 logger = logging.getLogger("optilb")
 
@@ -67,11 +68,14 @@ class BFGSOptimizer(Optimizer):
         parallel: bool = False,
         verbose: bool = False,
         early_stopper: EarlyStopper | None = None,
+        normalize: bool = True,
     ) -> OptResult:
         """Run the optimiser.
 
         Parameters match :meth:`Optimizer.optimize`. Only bound constraints are
-        enforced.
+        enforced. When ``normalize=True``, optimisation happens in the unit
+        hypercube ``[0,1]^d`` and inputs/outputs are reported in the original
+        coordinates.
         """
         if seed is not None:
             np.random.default_rng(seed)  # for API symmetry; not used directly
@@ -81,9 +85,16 @@ class BFGSOptimizer(Optimizer):
                 "BFGSOptimizer ignores nonlinear constraints; only bounds are enforced"
             )
         self.reset_history()
-        self.record(x0, tag="start")
 
-        bounds = list(zip(space.lower, space.upper))
+        transform: SpaceTransform | None = None
+        if normalize:
+            transform = SpaceTransform(space)
+            x0 = transform.to_unit(x0)
+            bounds = [(0.0, 1.0)] * space.dimension
+        else:
+            bounds = list(zip(space.lower, space.upper))
+
+        self.record(x0, tag="start")
 
         jac: Callable[[np.ndarray], np.ndarray] | None = self.gradient
         if jac is None:
@@ -93,14 +104,23 @@ class BFGSOptimizer(Optimizer):
                     jac = maybe
                     break
 
-        wrapped_obj = self._wrap_objective(objective)
+        if transform is not None:
+
+            def obj_unit(u: np.ndarray) -> float:
+                return float(objective(transform.from_unit(u)))
+
+            wrapped_obj = self._wrap_objective(obj_unit)
+        else:
+            wrapped_obj = self._wrap_objective(objective)
 
         options: dict[str, float | int | bool] = {
             "maxiter": max_iter,
             "ftol": tol,
             "gtol": tol,
-            "disp": verbose,
         }
+
+        if verbose:
+            logger.info("Starting L-BFGS-B optimisation with max_iter=%s", max_iter)
 
         if early_stopper is not None:
             early_stopper.reset()
@@ -133,8 +153,12 @@ class BFGSOptimizer(Optimizer):
                 elif eps_vec.shape != (n,):
                     raise ValueError("fd_eps must be scalar or match dimension")
 
-            lower = np.asarray(space.lower, dtype=float)
-            upper = np.asarray(space.upper, dtype=float)
+            if transform is not None:
+                lower = np.zeros(n, dtype=float)
+                upper = np.ones(n, dtype=float)
+            else:
+                lower = np.asarray(space.lower, dtype=float)
+                upper = np.asarray(space.upper, dtype=float)
 
             def _central_grad(x: np.ndarray) -> np.ndarray:
                 x = np.asarray(x, dtype=float)
@@ -189,6 +213,16 @@ class BFGSOptimizer(Optimizer):
 
             jac = _central_grad
             use_central = True
+        elif transform is not None:
+            user_jac = jac
+
+            def _jac_unit(u: np.ndarray) -> np.ndarray:
+                return (
+                    np.asarray(user_jac(transform.from_unit(u)), dtype=float)
+                    * transform.span
+                )
+
+            jac = _jac_unit
 
         # ------------------------- optimisation --------------------------
         try:
@@ -213,6 +247,14 @@ class BFGSOptimizer(Optimizer):
             best_f = wrapped_obj.last_val
             if best_f is None:
                 best_f = float(wrapped_obj(best))
+            if transform is not None:
+                best = transform.from_unit(best)
+                self._history = [
+                    DesignPoint(
+                        x=transform.from_unit(pt.x), tag=pt.tag, timestamp=pt.timestamp
+                    )
+                    for pt in self._history
+                ]
             return OptResult(
                 best_x=best,
                 best_f=float(best_f),
@@ -220,11 +262,24 @@ class BFGSOptimizer(Optimizer):
                 nfev=self.nfev,
             )
 
+        if verbose:
+            logger.info("SciPy optimisation finished: %s", res.message)
+
         if res.status != 0:
             logger.warning("SciPy optimisation did not converge: %s", res.message)
 
+        best_x = res.x
+        if transform is not None:
+            best_x = transform.from_unit(best_x)
+            self._history = [
+                DesignPoint(
+                    x=transform.from_unit(pt.x), tag=pt.tag, timestamp=pt.timestamp
+                )
+                for pt in self._history
+            ]
+
         return OptResult(
-            best_x=res.x,
+            best_x=best_x,
             best_f=float(res.fun),
             history=self.history,
             nfev=self.nfev,
