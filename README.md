@@ -34,6 +34,21 @@ difference/vertex evaluations.  All optimisers accept an optional
 ``runner.run_with_schedule`` helper executes an optimiser across multiple scale
 levels.
 
+For a higher‑level entry point that makes cross‑method comparisons easy,
+construct an :class:`OptimizationProblem`.  It accepts the objective, design
+space and initial point along with a chosen optimiser and common controls such
+as evaluation budgets and normalisation::
+
+    import numpy as np
+
+    from optilb import DesignSpace, OptimizationProblem, get_objective
+
+    ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
+    obj = get_objective("quadratic")
+    prob = OptimizationProblem(obj, ds, np.array([3.0, 3.0]), optimizer="bfgs")
+    result = prob.run()
+    print(result.best_x, result.best_f, prob.log.nfev)
+
 The toolbox ships core data classes, analytic objectives, a Latin-Hypercube
 sampler and the optimisers mentioned above.  Below is a minimal sampling
 example::
