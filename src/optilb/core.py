@@ -22,8 +22,11 @@ class DesignSpace:
             raise ValueError("Lower and upper bounds must have the same shape")
         if np.any(self.lower > self.upper):
             raise ValueError("Lower bounds must not exceed upper bounds")
-        if self.names is not None and len(self.names) != self.lower.size:
-            raise ValueError("Number of names must match dimension")
+        if self.names is not None:
+            names = tuple(self.names)
+            if len(names) != self.lower.size:
+                raise ValueError("Number of names must match dimension")
+            object.__setattr__(self, "names", names)
 
     @property
     def dimension(self) -> int:
