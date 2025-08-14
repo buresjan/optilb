@@ -9,15 +9,23 @@ import numpy as np
 
 @dataclass(slots=True, frozen=True)
 class DesignSpace:
-    """Continuous design space defined by lower and upper bounds."""
+    """Continuous design space defined by lower and upper bounds.
+
+    The ``lower`` and ``upper`` arrays are stored as read-only to preserve the
+    immutability of the frozen dataclass.
+    """
 
     lower: np.ndarray
     upper: np.ndarray
     names: Sequence[str] | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "lower", np.asarray(self.lower, dtype=float))
-        object.__setattr__(self, "upper", np.asarray(self.upper, dtype=float))
+        lower = np.asarray(self.lower, dtype=float).copy()
+        upper = np.asarray(self.upper, dtype=float).copy()
+        lower.setflags(write=False)
+        upper.setflags(write=False)
+        object.__setattr__(self, "lower", lower)
+        object.__setattr__(self, "upper", upper)
         if self.lower.shape != self.upper.shape:
             raise ValueError("Lower and upper bounds must have the same shape")
         if np.any(self.lower > self.upper):
@@ -44,14 +52,19 @@ class DesignSpace:
 
 @dataclass(slots=True, frozen=True)
 class DesignPoint:
-    """Single design vector with optional metadata."""
+    """Single design vector with optional metadata.
+
+    The coordinate array ``x`` is copied and marked read-only.
+    """
 
     x: np.ndarray
     tag: str | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "x", np.asarray(self.x, dtype=float))
+        x = np.asarray(self.x, dtype=float).copy()
+        x.setflags(write=False)
+        object.__setattr__(self, "x", x)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, DesignPoint):
@@ -76,7 +89,10 @@ class Constraint:
 
 @dataclass(slots=True, frozen=True)
 class OptResult:
-    """Result of an optimisation run."""
+    """Result of an optimisation run.
+
+    The ``best_x`` array is stored as read-only.
+    """
 
     best_x: np.ndarray
     best_f: float
@@ -84,7 +100,8 @@ class OptResult:
     nfev: int = 0
 
     def __post_init__(self) -> None:
-        arr = np.asarray(self.best_x, dtype=float)
+        arr = np.asarray(self.best_x, dtype=float).copy()
+        arr.setflags(write=False)
         object.__setattr__(self, "best_x", arr)
         if not isinstance(self.history, tuple):
             object.__setattr__(self, "history", tuple(self.history))

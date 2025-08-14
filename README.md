@@ -1,12 +1,11 @@
 # optilb
 
 **optilb** is an optimisation toolbox for low-dimensional shape tuning.  The
-roadmap combines Latin-Hypercube sampling with pluggable optimisers (Mesh
+project combines Latin-Hypercube sampling with pluggable optimisers (Mesh
 Adaptive Direct Search via PyNOMAD, SciPy's L-BFGS-B and a custom parallel
-Nelder–Mead).  CFD objectives—from analytic toy cases to external executables—are
-wrapped through a unified `OptimizationProblem` interface.  Optional
-Gaussian‑Process surrogates and robust optimisation utilities are scheduled for
-later milestones.
+Nelder–Mead).  Analytic toy objectives and lightweight surrogates are bundled
+for quick experimentation.  Gaussian‑Process surrogates and robust optimisation
+utilities are scheduled for later milestones.
 
 ## Installation
 
@@ -30,10 +29,14 @@ with a desired worker count and set ``parallel=True`` when calling
 
 `BFGSOptimizer` and `NelderMeadOptimizer` expose the same ``n_workers`` keyword
 to bound the number of threads or processes used for parallel finite
-difference/vertex evaluations.
+difference/vertex evaluations.  All optimisers accept an optional
+``EarlyStopper`` to terminate runs when progress stalls.  The
+``runner.run_with_schedule`` helper executes an optimiser across multiple scale
+levels.
 
-The current codebase provides the core data classes and a Latin-Hypercube
-sampler.  Below is a minimal example::
+The toolbox ships core data classes, analytic objectives, a Latin-Hypercube
+sampler and the optimisers mentioned above.  Below is a minimal sampling
+example::
 
     from optilb import DesignSpace
     from optilb.sampling import lhs
