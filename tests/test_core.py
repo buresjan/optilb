@@ -24,6 +24,13 @@ def test_designspace_invalid_bounds() -> None:
         DesignSpace(lower=[1.0, 0.0], upper=[0.0, 1.0])
 
 
+def test_designspace_names_are_immutable() -> None:
+    names = ["x", "y"]
+    ds = DesignSpace(lower=[0, 0], upper=[1, 1], names=names)
+    names[0] = "z"
+    assert ds.names == ("x", "y")
+
+
 def test_designpoint_equality_and_pickle() -> None:
     ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
     p1 = DesignPoint(x=[0.5, 0.5], tag="foo", timestamp=ts)
