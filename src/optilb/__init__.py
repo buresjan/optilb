@@ -11,6 +11,7 @@ from .optimizers import (
     NelderMeadOptimizer,
     Optimizer,
 )
+from .problem import OptimizationLog, OptimizationProblem
 from .sampling import lhs
 
 __all__ = [
@@ -26,5 +27,7 @@ __all__ = [
     "EarlyStopper",
     "lhs",
     "get_objective",
+    "OptimizationProblem",
+    "OptimizationLog",
 ]
 __version__ = "0.0.0"
