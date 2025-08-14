@@ -9,9 +9,11 @@ optilb Documentation
    objectives
    optimizers
    runner
+   problem
    api/sampling
    api/objectives
    api/optimizers
    api/runner
+   api/problem
    changelog
 
