@@ -5,6 +5,7 @@ The documentation is written in both reStructuredText (.rst) and Markdown (.md) 
 * `sampling.rst`/`sampling.md` cover the Latin-Hypercube sampler.
 * `objectives.rst`/`objectives.md` document analytic objective functions.
 * `optimizers.rst`/`optimizers.md` describe built-in local optimizers.
+* `runner.rst`/`runner.md` illustrate scheduled optimisation runs.
 * `api/` contains API reference files mirroring these modules.
 
 The Sphinx build currently uses the `.rst` files, but Markdown copies are provided for quick browsing on GitHub.
