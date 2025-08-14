@@ -1,7 +1,7 @@
 Latin-Hypercube Sampling (LHS)
 =============================
 
-``optilb`` provides a simple function :func:`optilb.sampling.lhs` to generate
+``optilb`` provides a simple function :func:`lhs <optilb.sampling.lhs.lhs>` to generate
 Latin-Hypercube samples within a given :class:`optilb.DesignSpace`.
 
 Example usage::

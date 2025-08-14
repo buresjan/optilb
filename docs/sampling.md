@@ -1,6 +1,6 @@
 # Latin-Hypercube Sampling (LHS)
 
-`optilb` provides a simple function `optilb.sampling.lhs` to generate Latin-Hypercube samples within a given `optilb.DesignSpace`.
+`optilb` provides a simple `lhs` function in the `optilb.sampling` package to generate Latin-Hypercube samples within a given `optilb.DesignSpace`.
 
 ```python
 from optilb import DesignSpace
