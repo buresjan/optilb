@@ -116,6 +116,7 @@ def run(name: str, optimizer, objective):
         max_iter=MAX_ITER,
         tol=1e-6,
         parallel=True,
+        normalize=True,
     )
     elapsed = time.perf_counter() - start
     results.append((name, res, elapsed))
