@@ -161,6 +161,20 @@ def make_step_rastrigin(
     return _StepRastrigin(sigma=sigma, seed=seed)
 
 
+_OBJECTIVES: dict[str, Callable[..., Callable[[np.ndarray], float]]] = {
+    "quadratic": lambda **_: quadratic_bowl,
+    "rastrigin": lambda **_: rastrigin,
+    "noisy_discontinuous": make_noisy_discontinuous,
+    "spiky_sine": make_spiky_sine,
+    "checkerboard": make_checkerboard,
+    "step_rastrigin": make_step_rastrigin,
+    "noisy_step_rastrigin": make_step_rastrigin,
+    "plateau_cliff": lambda **_: plateau_cliff,
+    "lbm": lambda **_: lbm_stub,
+    "lbm_stub": lambda **_: lbm_stub,
+}
+
+
 def get_objective(name: str, **kwargs: Any) -> Callable[[np.ndarray], float]:
     """Return an objective function by name.
 
@@ -172,23 +186,11 @@ def get_objective(name: str, **kwargs: Any) -> Callable[[np.ndarray], float]:
         Callable[[np.ndarray], float]: Objective function.
     """
     key = name.lower()
-    if key == "quadratic":
-        return quadratic_bowl
-    if key == "rastrigin":
-        return rastrigin
-    if key == "noisy_discontinuous":
-        return make_noisy_discontinuous(**kwargs)
-    if key == "spiky_sine":
-        return make_spiky_sine(**kwargs)
-    if key == "checkerboard":
-        return make_checkerboard(**kwargs)
-    if key in {"step_rastrigin", "noisy_step_rastrigin"}:
-        return make_step_rastrigin(**kwargs)
-    if key == "plateau_cliff":
-        return plateau_cliff
-    if key in {"lbm", "lbm_stub"}:
-        return lbm_stub
-    raise UnknownObjectiveError(f"Unknown objective '{name}'")
+    try:
+        factory = _OBJECTIVES[key]
+    except KeyError as err:
+        raise UnknownObjectiveError(f"Unknown objective '{name}'") from err
+    return factory(**kwargs)
 
 
 __all__ = [
