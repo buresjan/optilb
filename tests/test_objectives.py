@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
+from optilb.exceptions import UnknownObjectiveError
 from optilb.objectives import (
     get_objective,
     lbm_stub,
@@ -67,3 +69,8 @@ def test_get_objective_dispatch() -> None:
     assert callable(get_objective("spiky_sine"))
     assert callable(get_objective("checkerboard"))
     assert callable(get_objective("step_rastrigin"))
+
+
+def test_get_objective_unknown() -> None:
+    with pytest.raises(UnknownObjectiveError):
+        get_objective("does_not_exist")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .core import Constraint, DesignPoint, DesignSpace, OptResult
+from .exceptions import UnknownObjectiveError
 from .objectives import get_objective
 from .optimizers import (
     BFGSOptimizer,
@@ -27,6 +28,7 @@ __all__ = [
     "EarlyStopper",
     "lhs",
     "get_objective",
+    "UnknownObjectiveError",
     "OptimizationProblem",
     "OptimizationLog",
 ]
