@@ -9,6 +9,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from .core import Constraint, DesignSpace, OptResult
+from .exceptions import UnknownOptimizerError
 from .optimizers import (
     BFGSOptimizer,
     EarlyStopper,
@@ -129,7 +130,7 @@ class OptimizationProblem:
             elif key == "mads":
                 self.optimizer = MADSOptimizer(**opt_opts)
             else:  # pragma: no cover - defensive
-                raise ValueError(f"Unknown optimizer '{optimizer}'")
+                raise UnknownOptimizerError(f"Unknown optimizer '{optimizer}'")
         else:
             self.optimizer = optimizer
             if opt_opts:

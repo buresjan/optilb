@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 import numpy as np
 
+from ..exceptions import UnknownObjectiveError
 from .lbm_stub import lbm_stub
 
 
@@ -187,7 +188,7 @@ def get_objective(name: str, **kwargs: Any) -> Callable[[np.ndarray], float]:
         return plateau_cliff
     if key in {"lbm", "lbm_stub"}:
         return lbm_stub
-    raise ValueError(f"Unknown objective '{name}'")
+    raise UnknownObjectiveError(f"Unknown objective '{name}'")
 
 
 __all__ = [

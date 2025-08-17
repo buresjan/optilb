@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from optilb import DesignSpace, OptimizationProblem, get_objective
+from optilb import (
+    DesignSpace,
+    OptimizationProblem,
+    UnknownOptimizerError,
+    get_objective,
+)
 
 
 def test_problem_bfgs() -> None:
@@ -30,3 +36,10 @@ def test_problem_eval_cap() -> None:
     res = prob.run()
     assert prob.log is not None and prob.log.early_stopped
     assert res.nfev <= 5
+
+
+def test_unknown_optimizer() -> None:
+    ds = DesignSpace(lower=[-1.0, -1.0], upper=[1.0, 1.0])
+    obj = get_objective("quadratic")
+    with pytest.raises(UnknownOptimizerError):
+        OptimizationProblem(obj, ds, np.array([0.0, 0.0]), optimizer="foo")
