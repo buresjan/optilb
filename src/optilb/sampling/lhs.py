@@ -51,10 +51,9 @@ def lhs(
     scaled = qmc.scale(sample, design_space.lower, design_space.upper)
 
     # Round integers if bounds are integers
-    rounded = scaled.copy()
     for i, (lo, hi) in enumerate(zip(design_space.lower, design_space.upper)):
         if float(lo).is_integer() and float(hi).is_integer():
-            rounded[:, i] = np.rint(rounded[:, i])
+            np.rint(scaled[:, i], out=scaled[:, i])
 
-    points = [DesignPoint(x=row) for row in rounded]
+    points = [DesignPoint(x=row) for row in scaled]
     return points
