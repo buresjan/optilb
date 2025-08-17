@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence, cast
+from typing import Any, Sequence, cast
 
 import numpy as np
 
@@ -36,7 +36,7 @@ def _clone_early_stopper(es: EarlyStopper | None) -> EarlyStopper | None:
 
 def run_with_schedule(
     optimizer: Optimizer,
-    levels: List[ScaleLevel],
+    levels: list[ScaleLevel],
     x0: np.ndarray,
     budget_per_level: int,
     **opt_kwargs: Any,
@@ -84,7 +84,7 @@ def run_with_schedule(
     best_f = float("inf")
 
     for lvl in levels:
-        lvl_kwargs: Dict[str, Any] = dict(opt_kwargs)
+        lvl_kwargs: dict[str, Any] = dict(opt_kwargs)
         lvl_kwargs["max_iter"] = budget_per_level
 
         base_eps: float | Sequence[float] | np.ndarray | None = lvl_kwargs.pop(
