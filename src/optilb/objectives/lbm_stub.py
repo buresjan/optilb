@@ -15,25 +15,27 @@ def lbm_stub(
 ) -> float:
     """Lightweight surrogate for CFD cost.
 
-    This deterministic function mimics a multi-modal CFD response using
-    a sum of shifted Gaussians with additional sinusoidal perturbation.
+    This deterministic function mimics a multi-modal CFD response using a
+    sum of shifted Gaussians with additional sinusoidal perturbation.
 
-    Parameters
-    ----------
-    x:
-        Input vector.
-    sleep_ms:
-        Optional artificial delay in milliseconds to emulate wall time.
-    centers:
-        Locations of Gaussian peaks for each dimension.  If ``None``,
-        centers are placed evenly in ``[-0.5, 0.5]``.
-    width:
-        Standard deviation of each Gaussian peak.
+    Args:
+        x: Input vector.
+        sleep_ms: Optional artificial delay in milliseconds to emulate wall
+            time.
+        centers: Locations of Gaussian peaks for each dimension. If ``None``,
+            centers are placed evenly in ``[-0.5, 0.5]``.
+        width: Standard deviation of each Gaussian peak.
 
-    Returns
-    -------
-    float
-        Pseudo CFD objective value.
+    Returns:
+        float: Pseudo CFD objective value.
+
+    Raises:
+        ValueError: If the length of ``centers`` does not match ``x``.
+
+    Examples:
+        >>> import numpy as np
+        >>> lbm_stub(np.zeros(2))
+        0.0878...
     """
     arr = np.asarray(x, dtype=float)
     dim = arr.size
