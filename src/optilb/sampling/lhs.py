@@ -16,23 +16,25 @@ def lhs(
 ) -> list[DesignPoint]:
     """Generate Latin-Hypercube samples.
 
-    Parameters
-    ----------
-    sample_count:
-        Number of design points to generate.
-    design_space:
-        Continuous design space describing bounds.
-    seed:
-        Random seed for reproducibility.
-    centered:
-        Place points at the center of each hypercube cell.
-    scramble:
-        Enable scrambling of the unit hypercube.
+    Args:
+        sample_count: Number of design points to generate.
+        design_space: Continuous design space describing bounds.
+        seed: Random seed for reproducibility.
+        centered: Place points at the center of each hypercube cell.
+        scramble: Enable scrambling of the unit hypercube.
 
-    Returns
-    -------
-    list[DesignPoint]
-        Generated design points scaled to ``design_space``.
+    Returns:
+        list[DesignPoint]: Generated design points scaled to ``design_space``.
+
+    Raises:
+        ValueError: If ``sample_count`` is not positive.
+
+    Examples:
+        >>> from optilb.core import DesignSpace
+        >>> space = DesignSpace(lower=[0, 0], upper=[1, 1])
+        >>> pts = lhs(2, space, seed=0)
+        >>> len(pts)
+        2
     """
     rng = np.random.default_rng(seed)
 

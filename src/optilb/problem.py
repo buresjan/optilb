@@ -54,35 +54,44 @@ class _EvalCap:
 class OptimizationProblem:
     """Unified façade to run different local optimisers.
 
-    Parameters
-    ----------
-    objective:
-        Objective function returning a scalar value.
-    space:
-        Continuous design space defining variable bounds.
-    x0:
-        Starting point for the search.
-    optimizer:
-        Optimiser name or instance. Supported names are ``"bfgs"``,
-        ``"nelder-mead"`` and ``"mads"``. If an instance is provided it is
-        used directly.
-    constraints:
-        Optional sequence of constraints.
-    parallel:
-        Evaluate independent points concurrently where supported.
-    normalize:
-        Whether to operate in the unit hypercube when supported. ``None`` keeps
-        the optimiser's default.
-    max_iter, tol, seed:
-        Common optimisation controls forwarded to the underlying optimiser.
-    max_evals:
-        Hard cap on objective evaluations. When reached, the best known point is
-        returned and ``early_stopped`` is set in the log.
-    optimizer_options:
-        Keyword arguments used to construct the optimiser when *optimizer* is a
-        string identifier.
-    optimize_options:
-        Extra keyword arguments forwarded to ``optimizer.optimize``.
+    Args:
+        objective: Objective function returning a scalar value.
+        space: Continuous design space defining variable bounds.
+        x0: Starting point for the search.
+        optimizer: Optimiser name or instance. Supported names are
+            ``"bfgs"``, ``"nelder-mead"`` and ``"mads"``. If an instance is
+            provided it is used directly.
+        constraints: Optional sequence of constraints.
+        parallel: Evaluate independent points concurrently where supported.
+        normalize: Whether to operate in the unit hypercube when supported.
+            ``None`` keeps the optimiser's default.
+        max_iter: Maximum number of iterations.
+        tol: Convergence tolerance.
+        seed: Random seed for reproducibility.
+        max_evals: Hard cap on objective evaluations. When reached, the best
+            known point is returned and ``early_stopped`` is set in the log.
+        early_stopper: Optional early stopping controller.
+        verbose: Emit progress information.
+        optimizer_options: Keyword arguments used to construct the optimiser
+            when ``optimizer`` is a string identifier.
+        optimize_options: Extra keyword arguments forwarded to
+            ``optimizer.optimize``.
+
+    Returns:
+        None
+
+    Raises:
+        ValueError: If an unknown optimizer name is provided.
+
+    Examples:
+        >>> from optilb.core import DesignSpace
+        >>> def sphere(x):
+        ...     return float((x ** 2).sum())
+        >>> space = DesignSpace(lower=[-1, -1], upper=[1, 1])
+        >>> problem = OptimizationProblem(objective=sphere, space=space, x0=[0.5, 0.5])
+        >>> result = problem.run()
+        >>> result.best_x.round(1)
+        array([0., 0.])
     """
 
     def __init__(
