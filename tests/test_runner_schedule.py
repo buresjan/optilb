@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from optilb.core import DesignSpace
+from optilb.exceptions import MissingDependencyError
 from optilb.optimizers import BFGSOptimizer, MADSOptimizer, NelderMeadOptimizer
 from optilb.runner import ScaleLevel, run_with_schedule
 
@@ -74,6 +76,20 @@ def test_schedule_mads() -> None:
     x0 = np.array([0.8, 0.9])
 
     opt = MADSOptimizer()
+    if not MADSOptimizer.is_available():
+        with pytest.raises(MissingDependencyError, match="PyNomad"):
+            run_with_schedule(
+                opt,
+                levels,
+                x0,
+                budget_per_level=50,
+                objective=bumpy,
+                space=ds,
+                normalize=True,
+                seed=0,
+            )
+        return
+
     res = run_with_schedule(
         opt,
         levels,

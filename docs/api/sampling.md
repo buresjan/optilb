@@ -1,6 +1,9 @@
 # Sampling API
 
 This module exposes the `lhs` function used to create Latin-Hypercube samples.
+It returns `DesignPoint` instances and accepts `centered`/`scramble` flags to
+control how the unit cube is populated. Integer bounds are automatically
+rounded after scaling.
 
 ```python
 from optilb import DesignSpace

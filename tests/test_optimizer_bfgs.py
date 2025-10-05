@@ -47,3 +47,28 @@ def test_bfgs_nfev() -> None:
     res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=10)
     assert res.nfev == opt.nfev
     assert res.nfev >= len(res.history)
+
+
+def test_bfgs_respects_max_evals() -> None:
+    ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
+    obj = get_objective("quadratic")
+    opt = BFGSOptimizer()
+    res = opt.optimize(
+        obj,
+        np.array([3.0, -2.0]),
+        ds,
+        max_iter=200,
+        max_evals=15,
+    )
+    assert res.nfev <= 15
+
+
+def test_bfgs_zero_max_evals() -> None:
+    ds = DesignSpace(lower=[-5.0, -5.0], upper=[5.0, 5.0])
+    obj = get_objective("quadratic")
+    x0 = np.array([1.0, -1.0])
+    opt = BFGSOptimizer()
+    res = opt.optimize(obj, x0, ds, max_iter=20, max_evals=0)
+    assert res.nfev == 0
+    np.testing.assert_allclose(res.best_x, x0)
+    assert opt.last_budget_exhausted is True

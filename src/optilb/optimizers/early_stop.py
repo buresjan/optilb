@@ -17,12 +17,14 @@ class EarlyStopper:
     _best_f: float = field(default=float("inf"), init=False)
     _counter: int = field(default=0, init=False)
     _start: float = field(default_factory=time.perf_counter, init=False)
+    _stopped: bool = field(default=False, init=False)
 
     def reset(self) -> None:
         """Reset internal state for a new run."""
         self._best_f = float("inf")
         self._counter = 0
         self._start = time.perf_counter()
+        self._stopped = False
 
     def update(self, f_val: float) -> bool:
         """Update with the current objective value.
@@ -36,6 +38,7 @@ class EarlyStopper:
             self.time_limit is not None
             and (time.perf_counter() - self._start) >= self.time_limit
         ):
+            self._stopped = True
             return True
 
         stop = False
@@ -50,7 +53,15 @@ class EarlyStopper:
             if self._counter >= self.patience:
                 stop = True
 
+        if stop:
+            self._stopped = True
         return stop
+
+    @property
+    def stopped(self) -> bool:
+        """Whether the stopper has requested an early termination."""
+
+        return self._stopped
 
 
 __all__ = ["EarlyStopper"]

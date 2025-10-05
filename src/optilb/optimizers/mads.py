@@ -11,7 +11,10 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     PyNomad = None
 
+PYNOMAD_AVAILABLE = PyNomad is not None
+
 from ..core import Constraint, DesignSpace, OptResult
+from ..exceptions import MissingDependencyError
 from .base import Optimizer
 from .early_stop import EarlyStopper
 
@@ -54,6 +57,12 @@ class MADSOptimizer(Optimizer):
         super().__init__()
         self.n_workers = n_workers
 
+    @classmethod
+    def is_available(cls) -> bool:
+        """Return whether the underlying PyNomad library is available."""
+
+        return PYNOMAD_AVAILABLE
+
     def optimize(
         self,
         objective: Callable[[np.ndarray], float],
@@ -62,6 +71,7 @@ class MADSOptimizer(Optimizer):
         constraints: Sequence[Constraint] = (),
         *,
         max_iter: int = 100,
+        max_evals: int | None = None,
         tol: float = 1e-6,
         seed: int | None = None,
         parallel: bool = False,
@@ -91,9 +101,12 @@ class MADSOptimizer(Optimizer):
             Normalisation strategy. Only ``"unit"`` is supported.
         """
         if PyNomad is None:
-            raise ImportError(
-                "PyNOMAD is not installed; please install PyNomadBBO to use"
-                " MADSOptimizer"
+            raise MissingDependencyError(
+                "PyNomad",
+                guidance=(
+                    "install the optional 'PyNomadBBO' package to enable the MADS"
+                    " optimizer (pip install PyNomadBBO)."
+                ),
             )
 
         if seed is not None:
@@ -113,6 +126,7 @@ class MADSOptimizer(Optimizer):
 
         x0 = self._validate_x0(x0, space)
         self.reset_history()
+        self._configure_budget(max_evals)
         self.record(x0, tag="start")
         if early_stopper is not None:
             early_stopper.reset()
@@ -176,9 +190,11 @@ class MADSOptimizer(Optimizer):
             return 1
 
         output_types = "OBJ" + " PB" * len(con_funcs)
+        max_bbeval = max_iter if max_evals is None else max_evals
+
         params = [
             f"DIMENSION {dim}",
-            f"MAX_BB_EVAL {max_iter}",
+            f"MAX_BB_EVAL {max_bbeval}",
             f"BB_OUTPUT_TYPE {output_types}",
             f"DISPLAY_DEGREE {1 if verbose else 0}",
         ]
@@ -203,9 +219,11 @@ class MADSOptimizer(Optimizer):
         else:
             self._history_scaled = None
         best_f = float(res["f_best"])
-        return OptResult(
+        result = OptResult(
             best_x=best,
             best_f=best_f,
             history=self.history,
             nfev=self.nfev,
         )
+        self._clear_budget()
+        return result

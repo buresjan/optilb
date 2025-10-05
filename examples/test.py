@@ -11,11 +11,11 @@ from optilb import DesignSpace, OptimizationProblem, OptResult
 from optilb.optimizers.mads import PyNomad
 
 # Global configuration shared by all optimisation runs
-SCALE = 0.15
-MAX_ITER = 200
+SCALE = 0.05
+MAX_ITER = 100
 N_WORKERS = 4
-FD_EPS = 1e-6
-SLEEP_TIME = 0.1
+FD_EPS = 1e-4
+SLEEP_TIME = 0.02
 
 
 # ---------------------------------------------------------------------------

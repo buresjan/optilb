@@ -12,7 +12,7 @@ from optilb.optimizers import NelderMeadOptimizer
 def slow_obj(x: np.ndarray) -> float:
     """Slow objective used to demonstrate parallel speed-up."""
 
-    return lbm_stub(x, sleep_ms=500)
+    return lbm_stub(x, sleep_ms=50)
 
 
 def run_demo() -> None:

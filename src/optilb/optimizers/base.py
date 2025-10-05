@@ -7,6 +7,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from ..core import Constraint, DesignPoint, DesignSpace, OptResult
+from ..exceptions import EvaluationBudgetExceeded
 from .early_stop import EarlyStopper
 
 
@@ -17,9 +18,18 @@ class _CountingFunction:
     last_val: float | None = None
 
     def __call__(self, x: np.ndarray) -> float:
+        optimizer = self.optimizer
+        max_evals = optimizer._max_evals
+        if max_evals is not None and optimizer._nfev >= max_evals:
+            optimizer._budget_exhausted = True
+            raise EvaluationBudgetExceeded(max_evals)
+        optimizer._last_eval_point = np.asarray(x, dtype=float).copy()
         val = float(self.func(x))
         self.last_val = val
-        self.optimizer._nfev += 1
+        optimizer._nfev += 1
+        optimizer._update_best(x, val)
+        if max_evals is not None and optimizer._nfev >= max_evals:
+            optimizer._budget_exhausted = True
         return val
 
 
@@ -29,6 +39,12 @@ class Optimizer(ABC):
     def __init__(self) -> None:
         self._history: list[DesignPoint] = []
         self._nfev: int = 0
+        self._max_evals: int | None = None
+        self._budget_exhausted: bool = False
+        self._last_eval_point: np.ndarray | None = None
+        self._last_budget_exhausted: bool = False
+        self._best_point: np.ndarray | None = None
+        self._best_value: float | None = None
 
     # ------------------------------------------------------------------
     # Utility methods shared by all optimisers
@@ -43,14 +59,68 @@ class Optimizer(ABC):
         """Number of objective function evaluations so far."""
         return self._nfev
 
+    @property
+    def budget_exhausted(self) -> bool:
+        """Whether the evaluation budget was reached in the last run."""
+
+        return self._budget_exhausted
+
+    @property
+    def last_budget_exhausted(self) -> bool:
+        """Whether the evaluation budget was hit during the previous run."""
+
+        return self._last_budget_exhausted
+
+    def _configure_budget(self, max_evals: int | None) -> None:
+        if max_evals is not None:
+            if max_evals < 0:
+                raise ValueError("max_evals must be non-negative")
+            self._max_evals = max_evals
+        else:
+            self._max_evals = None
+        self._budget_exhausted = False
+        self._last_budget_exhausted = False
+
+    def _clear_budget(self) -> None:
+        self._last_budget_exhausted = self._budget_exhausted
+        self._max_evals = None
+        self._budget_exhausted = False
+        self._last_eval_point = None
+
+    def _get_last_eval_point(self) -> np.ndarray | None:
+        if self._last_eval_point is None:
+            return None
+        return self._last_eval_point.copy()
+
     def reset_history(self) -> None:
         """Clear stored optimisation history."""
         self._history.clear()
         self._nfev = 0
+        self._budget_exhausted = False
+        self._last_eval_point = None
+        self._last_budget_exhausted = False
+        self._best_point = None
+        self._best_value = None
 
     def record(self, x: np.ndarray, tag: str | None = None) -> None:
         """Record a point in the optimisation history."""
         self._history.append(DesignPoint(x=np.asarray(x, dtype=float), tag=tag))
+
+    def finalize_history(self) -> None:
+        """Hook for subclasses to post-process history before consumption."""
+
+        return None
+
+    def _update_best(self, x: np.ndarray, value: float) -> None:
+        arr = np.asarray(x, dtype=float)
+        if self._best_value is None or value < self._best_value:
+            self._best_value = float(value)
+            self._best_point = arr.copy()
+
+    def _get_best_evaluation(self) -> tuple[np.ndarray | None, float | None]:
+        if self._best_point is None or self._best_value is None:
+            return None, None
+        return self._best_point.copy(), float(self._best_value)
 
     def _validate_x0(self, x0: np.ndarray, space: DesignSpace) -> np.ndarray:
         """Ensure ``x0`` matches the design space."""
@@ -80,6 +150,7 @@ class Optimizer(ABC):
         constraints: Sequence[Constraint] = (),
         *,
         max_iter: int = 100,
+        max_evals: int | None = None,
         tol: float = 1e-6,
         seed: int | None = None,
         parallel: bool = False,

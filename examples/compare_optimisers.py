@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover - optional dependency
 np.random.seed(42)
 
 
-MAX_ITER = 200
+MAX_EVALS = 200
 
 
 # Known global minima of the benchmark objectives (noise-free).
@@ -50,8 +50,14 @@ def run_benchmark() -> None:
     ]
     dims = [2, 3, 5]
 
+    noise_free_kwargs = {
+        "checkerboard": {"sigma": 0.0},
+        "step_rastrigin": {"sigma": 0.0},
+        "spiky_sine": {"sigma": 0.0},
+    }
+
     for obj_name in objectives:
-        objective = get_objective(obj_name)
+        objective = get_objective(obj_name, **noise_free_kwargs.get(obj_name, {}))
         for dim in dims:
             lower = -5 * np.ones(dim)
             upper = 5 * np.ones(dim)
@@ -80,26 +86,35 @@ def run_benchmark() -> None:
                     continue
                 stopper = EarlyStopper(eps=1e-6, patience=15, enabled=True)
                 t0 = time.perf_counter()
-                res = opt.optimize(
-                    objective,
-                    x0,
-                    space,
-                    max_iter=MAX_ITER,
-                    parallel=parallel,
-                    early_stopper=stopper,
-                )
+                try:
+                    res = opt.optimize(
+                        objective,
+                        x0,
+                        space,
+                        max_iter=MAX_EVALS,
+                        max_evals=MAX_EVALS,
+                        parallel=parallel,
+                        early_stopper=stopper,
+                    )
+                except ImportError as exc:
+                    warnings.warn(str(exc), RuntimeWarning)
+                    continue
                 dt = time.perf_counter() - t0
                 optimum_val = OPTIMUM_VALUES.get(obj_name, float("nan"))
+                start_f = float(objective(x0))
                 rows.append(
                     {
                         "objective": obj_name,
                         "dim": dim,
+                        "start_x": x0.tolist(),
+                        "start_f": start_f,
                         "optimizer": name,
                         "best_f": res.best_f,
                         "optimum": optimum_val,
                         "evals": res.nfev,
                         "time_s": dt,
-                        "early_stop": stopper._counter >= stopper.patience,
+                        "early_stop": stopper.stopped,
+                        "budget_stop": res.nfev >= MAX_EVALS,
                     }
                 )
 

@@ -9,8 +9,10 @@ from typing import Callable, Iterable, Sequence, cast
 import numpy as np
 
 from ..core import Constraint, DesignPoint, DesignSpace, OptResult
+from ..exceptions import EvaluationBudgetExceeded
 from .base import Optimizer
 from .early_stop import EarlyStopper
+from .utils import SpaceTransform
 
 
 # ============================ top-level helpers =============================
@@ -111,6 +113,7 @@ class NelderMeadOptimizer(Optimizer):
 
         # remember desired worker count for the executor
         self.n_workers = n_workers
+        self._history_transform: SpaceTransform | None = None
 
     # ------------------------------------------------------------------
     def _make_penalised(
@@ -144,11 +147,48 @@ class NelderMeadOptimizer(Optimizer):
         """
 
         pts = list(points)
+        max_evals = self._max_evals
+        truncated = False
+        if max_evals is not None:
+            remaining = max_evals - self._nfev
+            if remaining <= 0:
+                self._budget_exhausted = True
+                raise EvaluationBudgetExceeded(max_evals)
+            if len(pts) > remaining:
+                pts = pts[:remaining]
+                truncated = True
+
         if executor is None:
-            return [func(p) for p in pts]
-        result = list(executor.map(func, pts))
-        self._nfev += len(pts)
-        return result
+            values: list[float] = []
+            for point in pts:
+                val = func(point)
+                values.append(val)
+                self._update_best(point, val)
+            if truncated:
+                assert max_evals is not None
+                self._budget_exhausted = True
+                raise EvaluationBudgetExceeded(max_evals)
+            return values
+
+        results: list[float] = []
+        iterator = executor.map(func, pts)
+        try:
+            for point, val in zip(pts, iterator):
+                results.append(val)
+                self._update_best(point, val)
+                self._nfev += 1
+        except StopIteration:
+            raise
+        except RuntimeError as exc:
+            if str(exc) == "generator raised StopIteration":
+                raise StopIteration from exc
+            raise
+
+        if truncated:
+            assert max_evals is not None
+            self._budget_exhausted = True
+            raise EvaluationBudgetExceeded(max_evals)
+        return results
 
     # ------------------------------------------------------------------
     def optimize(
@@ -159,6 +199,7 @@ class NelderMeadOptimizer(Optimizer):
         constraints: Sequence[Constraint] = (),
         *,
         max_iter: int = 100,
+        max_evals: int | None = None,
         tol: float = 1e-6,
         seed: int | None = None,
         parallel: bool = False,
@@ -178,19 +219,13 @@ class NelderMeadOptimizer(Optimizer):
 
         # -------------------- optional normalisation -------------------
         # We create picklable wrappers via top-level helpers + partials.
-        history_unscale: Callable[[np.ndarray], np.ndarray] | None = None
+        normalize_transform: SpaceTransform | None = None
+        self._history_transform = None
 
         if normalize:
-            if np.any(space.upper <= space.lower):
-                raise ValueError("upper must be greater than lower for normalization")
-            lower = space.lower.astype(float)
-            span = (space.upper - space.lower).astype(float)
-
-            def to_unit(x: np.ndarray) -> np.ndarray:
-                return cast(np.ndarray, (np.asarray(x, dtype=float) - lower) / span)
-
-            def from_unit(u: np.ndarray) -> np.ndarray:
-                return _from_unit(np.asarray(u, dtype=float), lower, span)
+            normalize_transform = SpaceTransform(space)
+            lower = normalize_transform.lower
+            span = normalize_transform.span
 
             # Wrap objective/constraints for unit space (picklable)
             objective = cast(
@@ -217,16 +252,17 @@ class NelderMeadOptimizer(Optimizer):
 
             # Replace design space and initial point with unit versions
             space = DesignSpace(np.zeros(space.dimension), np.ones(space.dimension))
-            x0 = to_unit(x0)
+            x0 = normalize_transform.to_unit(x0)
 
-            # history unscale function for post-processing
-            history_unscale = from_unit
+            # keep transform for history post-processing
+            self._history_transform = normalize_transform
 
         # Normal validation/wrapping continues with possibly replaced
         # `space/objective/x0`
         x0 = self._validate_x0(x0, space)
         objective = self._wrap_objective(objective)
         self.reset_history()
+        self._configure_budget(max_evals)
         self.record(x0, tag="start")
 
         n = space.dimension
@@ -244,126 +280,150 @@ class NelderMeadOptimizer(Optimizer):
             early_stopper.reset()
 
         # ----------------------------- executor -------------------------
-        with (
-            ProcessPoolExecutor(max_workers=self.n_workers)
-            if parallel
-            else nullcontext()
-        ) as executor:
-            # initial simplex (N + 1 points)
-            simplex = [x0]
-            for i in range(n):
-                pt = x0.copy()
-                pt[i] += step[i]
-                simplex.append(pt)
-            fvals = self._eval_points(penalised, simplex, executor)
+        simplex: list[np.ndarray] = [x0]
+        fvals: list[float] = []
+        try:
+            with (
+                ProcessPoolExecutor(max_workers=self.n_workers)
+                if parallel
+                else nullcontext()
+            ) as executor:
+                # initial simplex (N + 1 points)
+                for i in range(n):
+                    pt = x0.copy()
+                    pt[i] += step[i]
+                    simplex.append(pt)
+                fvals = self._eval_points(penalised, simplex, executor)
 
-            best = min(fvals)
-            no_improv = 0
+                best = min(fvals)
+                no_improv = 0
 
-            # --------------------- main loop ---------------------------
-            for it in range(max_iter):
-                order = np.argsort(fvals)
-                simplex = [simplex[i] for i in order]
-                fvals = [fvals[i] for i in order]
-                current_best = fvals[0]
+                # --------------------- main loop ---------------------------
+                for it in range(max_iter):
+                    order = np.argsort(fvals)
+                    simplex = [simplex[i] for i in order]
+                    fvals = [fvals[i] for i in order]
+                    current_best = fvals[0]
 
-                self.record(simplex[0], tag=str(it))
-                if verbose:
-                    logger.info("%d | best %.6f", it, current_best)
+                    self.record(simplex[0], tag=str(it))
+                    if verbose:
+                        logger.info("%d | best %.6f", it, current_best)
 
-                # early stopping / no-improve logic
-                if early_stopper is None:
-                    if best - current_best > tol:
-                        best = current_best
-                        no_improv = 0
+                    # early stopping / no-improve logic
+                    if early_stopper is None:
+                        if best - current_best > tol:
+                            best = current_best
+                            no_improv = 0
+                        else:
+                            no_improv += 1
+                        if no_improv >= self.no_improv_break:
+                            break
                     else:
-                        no_improv += 1
-                    if no_improv >= self.no_improv_break:
-                        break
-                else:
-                    if early_stopper.update(current_best):
-                        break
+                        if early_stopper.update(current_best):
+                            break
 
-                centroid = np.mean(simplex[:-1], axis=0)
-                worst = simplex[-1]
+                    centroid = np.mean(simplex[:-1], axis=0)
+                    worst = simplex[-1]
 
-                # Build candidate vertices
-                xr = centroid + self.alpha * (centroid - worst)  # reflection
-                xe = centroid + self.gamma * (xr - centroid)  # expansion
-                xoc = centroid + self.beta * (xr - centroid)  # outside contraction
-                xic = centroid + self.delta * (worst - centroid)  # inside contraction
+                    # Build candidate vertices
+                    xr = centroid + self.alpha * (centroid - worst)  # reflection
+                    xe = centroid + self.gamma * (xr - centroid)  # expansion
+                    xoc = centroid + self.beta * (xr - centroid)  # outside contraction
+                    xic = centroid + self.delta * (worst - centroid)  # inside contraction
 
-                fe: float | None
-                foc: float | None
-                fic: float | None
-                if parallel and executor is not None:
-                    fr, fe, foc, fic = self._eval_points(
-                        penalised, [xr, xe, xoc, xic], executor
-                    )
-                else:
-                    fr = self._eval_points(penalised, [xr], executor)[0]
-                    fe = foc = fic = None
-
-                # Decision tree (textbook Nelder–Mead)
-                if fvals[0] <= fr < fvals[-2]:
-                    simplex[-1] = xr
-                    fvals[-1] = fr
-                    continue
-
-                if fr < fvals[0]:
-                    if fe is None:
-                        fe = self._eval_points(penalised, [xe], executor)[0]
-                    if fe < fr:
-                        simplex[-1] = xe
-                        fvals[-1] = fe
+                    fe: float | None
+                    foc: float | None
+                    fic: float | None
+                    if parallel and executor is not None:
+                        fr, fe, foc, fic = self._eval_points(
+                            penalised, [xr, xe, xoc, xic], executor
+                        )
                     else:
+                        fr = self._eval_points(penalised, [xr], executor)[0]
+                        fe = foc = fic = None
+
+                    # Decision tree (textbook Nelder–Mead)
+                    if fvals[0] <= fr < fvals[-2]:
                         simplex[-1] = xr
                         fvals[-1] = fr
-                    continue
-
-                if fvals[-2] <= fr < fvals[-1]:
-                    if foc is None:
-                        foc = self._eval_points(penalised, [xoc], executor)[0]
-                    if foc <= fr:
-                        simplex[-1] = xoc
-                        fvals[-1] = foc
                         continue
 
-                if fic is None:
-                    fic = self._eval_points(penalised, [xic], executor)[0]
-                if fic < fvals[-1]:
-                    simplex[-1] = xic
-                    fvals[-1] = fic
-                    continue
+                    if fr < fvals[0]:
+                        if fe is None:
+                            fe = self._eval_points(penalised, [xe], executor)[0]
+                        if fe < fr:
+                            simplex[-1] = xe
+                            fvals[-1] = fe
+                        else:
+                            simplex[-1] = xr
+                            fvals[-1] = fr
+                        continue
 
-                # Shrink
-                new_points = [simplex[0]]
-                for p in simplex[1:]:
-                    new_points.append(simplex[0] + self.sigma * (p - simplex[0]))
-                new_f = self._eval_points(penalised, new_points[1:], executor)
-                simplex = new_points
-                fvals = [fvals[0]] + list(new_f)
+                    if fvals[-2] <= fr < fvals[-1]:
+                        if foc is None:
+                            foc = self._eval_points(penalised, [xoc], executor)[0]
+                        if foc <= fr:
+                            simplex[-1] = xoc
+                            fvals[-1] = foc
+                            continue
+
+                    if fic is None:
+                        fic = self._eval_points(penalised, [xic], executor)[0]
+                    if fic < fvals[-1]:
+                        simplex[-1] = xic
+                        fvals[-1] = fic
+                        continue
+
+                    # Shrink
+                    new_points = [simplex[0]]
+                    for p in simplex[1:]:
+                        new_points.append(simplex[0] + self.sigma * (p - simplex[0]))
+                    new_f = self._eval_points(penalised, new_points[1:], executor)
+                    simplex = new_points
+                    fvals = [fvals[0]] + list(new_f)
+        except EvaluationBudgetExceeded:
+            logger.info("Nelder-Mead stopped after reaching the evaluation budget")
+        finally:
+            self._clear_budget()
 
         # -------------------------- done -------------------------------
-        idx = int(np.argmin(fvals))
-        best_x = simplex[idx]
-        best_f = fvals[idx]
+        if fvals:
+            idx = int(np.argmin(fvals))
+            best_x = simplex[idx]
+            best_f = float(fvals[idx])
+        else:
+            best_eval_point, best_eval_value = self._get_best_evaluation()
+            if best_eval_point is not None and best_eval_value is not None:
+                best_x = best_eval_point
+                best_f = float(best_eval_value)
+            else:
+                best_x = x0
+                best_f = float("nan")
 
+        best_x = np.asarray(best_x, dtype=float)
         # Map result/history back to original coordinates if we normalized
-        if normalize and history_unscale is not None:
-            best_x = history_unscale(best_x)
-            self._history = [
-                DesignPoint(
-                    x=history_unscale(pt.x),
-                    tag=pt.tag,
-                    timestamp=pt.timestamp,
-                )
-                for pt in self._history
-            ]
-
-        return OptResult(
+        if normalize and normalize_transform is not None:
+            best_x = normalize_transform.from_unit(best_x)
+        best_x = np.asarray(best_x, dtype=float).copy()
+        self.finalize_history()
+        result = OptResult(
             best_x=best_x,
             best_f=float(best_f),
             history=self.history,
             nfev=self.nfev,
         )
+        return result
+
+    def finalize_history(self) -> None:
+        if self._history_transform is None:
+            return
+        transform = self._history_transform
+        self._history = [
+            DesignPoint(
+                x=transform.from_unit(pt.x),
+                tag=pt.tag,
+                timestamp=pt.timestamp,
+            )
+            for pt in self._history
+        ]
+        self._history_transform = None

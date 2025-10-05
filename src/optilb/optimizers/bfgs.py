@@ -10,6 +10,7 @@ import numpy as np
 from scipy import optimize
 
 from ..core import Constraint, DesignPoint, DesignSpace, OptResult
+from ..exceptions import EvaluationBudgetExceeded
 from .base import Optimizer
 from .early_stop import EarlyStopper
 from .utils import SpaceTransform
@@ -54,6 +55,7 @@ class BFGSOptimizer(Optimizer):
         self.step = step
         self.fd_eps = fd_eps
         self.n_workers = n_workers
+        self._history_transform: SpaceTransform | None = None
 
     def optimize(
         self,
@@ -63,6 +65,7 @@ class BFGSOptimizer(Optimizer):
         constraints: Sequence[Constraint] = (),
         *,
         max_iter: int = 100,
+        max_evals: int | None = None,
         tol: float = 1e-6,
         seed: int | None = None,
         parallel: bool = False,
@@ -85,12 +88,15 @@ class BFGSOptimizer(Optimizer):
                 "BFGSOptimizer ignores nonlinear constraints; only bounds are enforced"
             )
         self.reset_history()
+        self._configure_budget(max_evals)
+        self._history_transform = None
 
         transform: SpaceTransform | None = None
         if normalize:
             transform = SpaceTransform(space)
             x0 = transform.to_unit(x0)
             bounds = [(0.0, 1.0)] * space.dimension
+            self._history_transform = transform
         else:
             bounds = list(zip(space.lower, space.upper))
 
@@ -113,11 +119,23 @@ class BFGSOptimizer(Optimizer):
         else:
             wrapped_obj = self._wrap_objective(objective)
 
+        last_eval_point: np.ndarray | None = None
+        last_eval_value: float | None = None
+
+        def objective_main(x: np.ndarray) -> float:
+            nonlocal last_eval_point, last_eval_value
+            val = float(wrapped_obj(x))
+            last_eval_point = np.asarray(x, dtype=float).copy()
+            last_eval_value = val
+            return val
+
         options: dict[str, float | int | bool] = {
             "maxiter": max_iter,
             "ftol": tol,
             "gtol": tol,
         }
+        if max_evals is not None:
+            options["maxfun"] = max_evals
 
         if verbose:
             logger.info("Starting L-BFGS-B optimisation with max_iter=%s", max_iter)
@@ -126,10 +144,20 @@ class BFGSOptimizer(Optimizer):
             early_stopper.reset()
 
         def _callback(xk: np.ndarray) -> None:
+            nonlocal last_eval_point, last_eval_value
             self.record(xk, tag=f"{len(self._history)}")
             if early_stopper is not None:
-                # Always recompute f(xk) to avoid races with threaded FD evals
-                f_val = float(wrapped_obj(xk))
+                if (
+                    last_eval_point is not None
+                    and last_eval_value is not None
+                    and last_eval_point.shape == xk.shape
+                    and np.allclose(last_eval_point, xk)
+                ):
+                    f_val = last_eval_value
+                else:
+                    f_val = float(wrapped_obj(xk))
+                    last_eval_point = np.asarray(xk, dtype=float).copy()
+                    last_eval_value = f_val
                 if early_stopper.update(f_val):
                     raise StopIteration
 
@@ -233,7 +261,7 @@ class BFGSOptimizer(Optimizer):
                 ThreadPoolExecutor(max_workers=_workers) if _workers else nullcontext()
             ) as _executor:
                 res = optimize.minimize(
-                    cast(Callable[[np.ndarray], float], wrapped_obj),
+                    cast(Callable[[np.ndarray], float], objective_main),
                     x0,
                     method="L-BFGS-B",
                     jac=jac,
@@ -244,23 +272,33 @@ class BFGSOptimizer(Optimizer):
         except StopIteration:
             logger.info("Optimization stopped early by callback")
             best = self.history[-1].x
-            best_f = wrapped_obj.last_val
-            if best_f is None:
-                best_f = float(wrapped_obj(best))
+            best_f = last_eval_value if last_eval_value is not None else wrapped_obj.last_val
             if transform is not None:
                 best = transform.from_unit(best)
-                self._history = [
-                    DesignPoint(
-                        x=transform.from_unit(pt.x), tag=pt.tag, timestamp=pt.timestamp
-                    )
-                    for pt in self._history
-                ]
-            return OptResult(
+            self.finalize_history()
+            result = OptResult(
                 best_x=best,
-                best_f=float(best_f),
+                best_f=float(best_f if best_f is not None else float("nan")),
                 history=self.history,
                 nfev=self.nfev,
             )
+            self._clear_budget()
+            return result
+        except EvaluationBudgetExceeded:
+            logger.info("Optimization stopped after reaching the evaluation budget")
+            best = self.history[-1].x
+            best_f = last_eval_value if last_eval_value is not None else wrapped_obj.last_val
+            if transform is not None:
+                best = transform.from_unit(best)
+            self.finalize_history()
+            result = OptResult(
+                best_x=best,
+                best_f=float(best_f if best_f is not None else float("nan")),
+                history=self.history,
+                nfev=self.nfev,
+            )
+            self._clear_budget()
+            return result
 
         if verbose:
             logger.info("SciPy optimisation finished: %s", res.message)
@@ -271,16 +309,23 @@ class BFGSOptimizer(Optimizer):
         best_x = res.x
         if transform is not None:
             best_x = transform.from_unit(best_x)
-            self._history = [
-                DesignPoint(
-                    x=transform.from_unit(pt.x), tag=pt.tag, timestamp=pt.timestamp
-                )
-                for pt in self._history
-            ]
+        self.finalize_history()
 
-        return OptResult(
+        result = OptResult(
             best_x=best_x,
             best_f=float(res.fun),
             history=self.history,
             nfev=self.nfev,
         )
+        self._clear_budget()
+        return result
+
+    def finalize_history(self) -> None:
+        if self._history_transform is None:
+            return
+        transform = self._history_transform
+        self._history = [
+            DesignPoint(x=transform.from_unit(pt.x), tag=pt.tag, timestamp=pt.timestamp)
+            for pt in self._history
+        ]
+        self._history_transform = None

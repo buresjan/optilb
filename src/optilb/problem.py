@@ -146,6 +146,7 @@ class OptimizationProblem:
         kwargs: dict[str, Any] = {}
         for name, value in {
             "max_iter": self.max_iter,
+            "max_evals": self.max_evals,
             "tol": self.tol,
             "seed": self.seed,
             "parallel": self.parallel,
@@ -162,6 +163,26 @@ class OptimizationProblem:
     # ------------------------------------------------------------------
     def run(self) -> OptResult:
         """Execute the optimisation and return the result."""
+
+        if self.max_evals == 0:
+            x0 = np.asarray(self.x0, dtype=float)
+            self.optimizer.reset_history()
+            self.optimizer.record(x0, tag="start")
+            self.optimizer.record(x0, tag="cap")
+            res = OptResult(
+                best_x=x0,
+                best_f=float("inf"),
+                history=self.optimizer.history,
+                nfev=0,
+            )
+            self.log = OptimizationLog(
+                optimizer=type(self.optimizer).__name__,
+                runtime=0.0,
+                nfev=0,
+                early_stopped=True,
+            )
+            self._result = res
+            return res
 
         kwargs = self._build_optimize_kwargs()
         objective: Callable[[np.ndarray], float] = self.objective
@@ -187,7 +208,8 @@ class OptimizationProblem:
             best_f = capper.best_f
             if best_x is None:
                 best_x = np.asarray(self.x0, dtype=float)
-                best_f = float(self.objective(best_x))
+            best_f = float(best_f)
+            self.optimizer.finalize_history()
             self.optimizer.record(best_x, tag="cap")
             res = OptResult(
                 best_x=best_x,
@@ -196,11 +218,10 @@ class OptimizationProblem:
                 nfev=self.optimizer.nfev,
             )
         runtime = perf_counter() - start
-        if (
-            self.early_stopper is not None
-            and len(self.optimizer.history) < self.max_iter
-        ):
-            early = True or early
+        if self.early_stopper is not None and self.early_stopper.stopped:
+            early = True
+        if getattr(self.optimizer, "last_budget_exhausted", False):
+            early = True
         self.log = OptimizationLog(
             optimizer=type(self.optimizer).__name__,
             runtime=runtime,

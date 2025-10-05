@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .core import Constraint, DesignPoint, DesignSpace, OptResult
+from .exceptions import EvaluationBudgetExceeded, MissingDependencyError, OptilbError
 from .objectives import get_objective
 from .optimizers import (
     BFGSOptimizer,
@@ -25,6 +26,9 @@ __all__ = [
     "MADSOptimizer",
     "NelderMeadOptimizer",
     "EarlyStopper",
+    "OptilbError",
+    "EvaluationBudgetExceeded",
+    "MissingDependencyError",
     "lhs",
     "get_objective",
     "OptimizationProblem",
