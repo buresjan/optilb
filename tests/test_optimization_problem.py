@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from optilb import DesignSpace, EarlyStopper, OptimizationProblem, get_objective
+from optilb import (
+    DesignSpace,
+    EarlyStopper,
+    OptimizationProblem,
+    UnknownOptimizerError,
+    get_objective,
+)
 
 
 def test_problem_bfgs() -> None:
@@ -81,3 +88,23 @@ def test_problem_eval_cap_history_normalized() -> None:
     for pt in res.history:
         assert np.all(pt.x <= ds.upper + 1e-9)
         assert np.all(pt.x >= ds.lower - 1e-9)
+
+
+def test_problem_zero_budget_validates_x0() -> None:
+    ds = DesignSpace(lower=[-1.0, -1.0], upper=[1.0, 1.0])
+    obj = get_objective("quadratic")
+    prob = OptimizationProblem(
+        obj,
+        ds,
+        np.array([0.0]),
+        max_evals=0,
+    )
+    with pytest.raises(ValueError, match="Initial point has wrong dimension"):
+        prob.run()
+
+
+def test_unknown_optimizer() -> None:
+    ds = DesignSpace(lower=[-1.0, -1.0], upper=[1.0, 1.0])
+    obj = get_objective("quadratic")
+    with pytest.raises(UnknownOptimizerError):
+        OptimizationProblem(obj, ds, np.array([0.0, 0.0]), optimizer="foo")

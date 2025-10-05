@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Any, Dict, List, Sequence, cast
+from typing import Any, Sequence, cast
 
 import numpy as np
 
@@ -36,32 +36,41 @@ def _clone_early_stopper(es: EarlyStopper | None) -> EarlyStopper | None:
 
 def run_with_schedule(
     optimizer: Optimizer,
-    levels: List[ScaleLevel],
+    levels: list[ScaleLevel],
     x0: np.ndarray,
     budget_per_level: int,
     **opt_kwargs: Any,
 ) -> OptResult:
     """Run *optimizer* through successive scale levels.
 
-    Parameters
-    ----------
-    optimizer:
-        Optimiser instance to run.
-    levels:
-        Ordered list of :class:`ScaleLevel` objects.
-    x0:
-        Starting point for the first level.
-    budget_per_level:
-        Maximum number of iterations allowed per level.
-    **opt_kwargs:
-        Additional keyword arguments forwarded to ``optimizer.optimize``.
-        Must include ``objective`` and ``space``.
+    Args:
+        optimizer: Optimiser instance to run.
+        levels: Ordered list of :class:`ScaleLevel` objects.
+        x0: Starting point for the first level.
+        budget_per_level: Maximum number of iterations allowed per level.
+        **opt_kwargs: Additional keyword arguments forwarded to
+            ``optimizer.optimize``. Must include ``objective`` and ``space``.
 
-    Returns
-    -------
-    OptResult
-        Result containing the best design found, accumulated history and total
-        evaluation count across all levels.
+    Returns:
+        OptResult: Result containing the best design found, accumulated history
+        and total evaluation count across all levels.
+
+    Raises:
+        ValueError: If ``levels`` is empty.
+
+    Examples:
+        >>> import numpy as np
+        >>> from optilb.core import DesignSpace
+        >>> from optilb.optimizers.nelder_mead import NelderMeadOptimizer
+        >>> levels = [ScaleLevel(nm_step=0.1, mads_mesh=1.0, bfgs_eps_scale=1.0)]
+        >>> def sphere(x):
+        ...     return float((x ** 2).sum())
+        >>> res = run_with_schedule(
+        ...     NelderMeadOptimizer(), levels, np.zeros(1), 5,
+        ...     objective=sphere, space=DesignSpace(lower=[-1], upper=[1])
+        ... )
+        >>> res.best_x.round(1)
+        array([0.])
     """
 
     from ..optimizers.bfgs import BFGSOptimizer
@@ -75,7 +84,7 @@ def run_with_schedule(
     best_f = float("inf")
 
     for lvl in levels:
-        lvl_kwargs: Dict[str, Any] = dict(opt_kwargs)
+        lvl_kwargs: dict[str, Any] = dict(opt_kwargs)
         lvl_kwargs["max_iter"] = budget_per_level
 
         base_eps: float | Sequence[float] | np.ndarray | None = lvl_kwargs.pop(

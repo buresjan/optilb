@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ProcessPoolExecutor
-from contextlib import nullcontext
+import os
+from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
+from contextlib import contextmanager
 from functools import partial
-from typing import Callable, Iterable, Sequence, cast
+from typing import Callable, Iterable, Iterator, Sequence, cast
 
 import numpy as np
 
@@ -70,6 +71,28 @@ def _evaluate_point(
 logger = logging.getLogger("optilb")
 
 
+@contextmanager
+def _parallel_executor(
+    parallel: bool, n_workers: int | None
+) -> Iterator[tuple[Executor | None, bool]]:
+    if not parallel:
+        yield None, False
+        return
+    force_threads = os.environ.get("OPTILB_FORCE_THREAD_POOL", "").lower()
+    if force_threads in {"1", "true", "yes", "on"}:
+        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            yield executor, False
+        return
+    try:
+        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+            yield executor, True
+            return
+    except (OSError, PermissionError):
+        logger.debug("Falling back to ThreadPoolExecutor for Nelder-Mead")
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        yield executor, False
+
+
 # ===========================================================================
 
 
@@ -78,6 +101,9 @@ class NelderMeadOptimizer(Optimizer):
 
     Set ``parallel=True`` when calling :meth:`optimize` to evaluate independent
     simplex points concurrently with :class:`concurrent.futures.ProcessPoolExecutor`.
+    When the host environment forbids spawning processes (for example in
+    sandboxed CI), the optimiser falls back to
+    :class:`concurrent.futures.ThreadPoolExecutor` while retaining the same API.
 
     Set ``normalize=True`` to perform the optimisation in the unit hypercube,
     mapping inputs/outputs accordingly. This makes default step/coefficients
@@ -135,7 +161,8 @@ class NelderMeadOptimizer(Optimizer):
         self,
         func: Callable[[np.ndarray], float],
         points: Iterable[np.ndarray],
-        executor: ProcessPoolExecutor | None,
+        executor: Executor | None,
+        manual_count: bool,
     ) -> list[float]:
         """Evaluate *points* either sequentially or in a process pool.
 
@@ -164,6 +191,9 @@ class NelderMeadOptimizer(Optimizer):
                 val = func(point)
                 values.append(val)
                 self._update_best(point, val)
+                if manual_count:
+                    with self._state_lock:
+                        self._last_eval_point = np.asarray(point, dtype=float).copy()
             if truncated:
                 assert max_evals is not None
                 self._budget_exhausted = True
@@ -176,7 +206,10 @@ class NelderMeadOptimizer(Optimizer):
             for point, val in zip(pts, iterator):
                 results.append(val)
                 self._update_best(point, val)
-                self._nfev += 1
+                if manual_count:
+                    self._nfev += 1
+                    with self._state_lock:
+                        self._last_eval_point = np.asarray(point, dtype=float).copy()
         except StopIteration:
             raise
         except RuntimeError as exc:
@@ -260,7 +293,10 @@ class NelderMeadOptimizer(Optimizer):
         # Normal validation/wrapping continues with possibly replaced
         # `space/objective/x0`
         x0 = self._validate_x0(x0, space)
-        objective = self._wrap_objective(objective)
+
+        raw_objective = objective
+        counted_objective = self._wrap_objective(raw_objective)
+
         self.reset_history()
         self._configure_budget(max_evals)
         self.record(x0, tag="start")
@@ -274,7 +310,10 @@ class NelderMeadOptimizer(Optimizer):
         # NOTE: do NOT scale `step` by original spans when normalize=True;
         # in unit space, step means exactly that fraction of [0,1].
 
-        penalised = self._make_penalised(objective, space, constraints)
+        penalised_counting = self._make_penalised(
+            counted_objective, space, constraints
+        )
+        penalised_raw = self._make_penalised(raw_objective, space, constraints)
 
         if early_stopper is not None:
             early_stopper.reset()
@@ -283,17 +322,17 @@ class NelderMeadOptimizer(Optimizer):
         simplex: list[np.ndarray] = [x0]
         fvals: list[float] = []
         try:
-            with (
-                ProcessPoolExecutor(max_workers=self.n_workers)
-                if parallel
-                else nullcontext()
-            ) as executor:
+            with _parallel_executor(parallel, self.n_workers) as (
+                executor,
+                manual_count,
+            ):
+                evaluate = penalised_raw if manual_count else penalised_counting
                 # initial simplex (N + 1 points)
                 for i in range(n):
                     pt = x0.copy()
                     pt[i] += step[i]
                     simplex.append(pt)
-                fvals = self._eval_points(penalised, simplex, executor)
+                fvals = self._eval_points(evaluate, simplex, executor, manual_count)
 
                 best = min(fvals)
                 no_improv = 0
@@ -336,10 +375,12 @@ class NelderMeadOptimizer(Optimizer):
                     fic: float | None
                     if parallel and executor is not None:
                         fr, fe, foc, fic = self._eval_points(
-                            penalised, [xr, xe, xoc, xic], executor
+                            evaluate, [xr, xe, xoc, xic], executor, manual_count
                         )
                     else:
-                        fr = self._eval_points(penalised, [xr], executor)[0]
+                        fr = self._eval_points(
+                            evaluate, [xr], executor, manual_count
+                        )[0]
                         fe = foc = fic = None
 
                     # Decision tree (textbook Nelder–Mead)
@@ -350,7 +391,9 @@ class NelderMeadOptimizer(Optimizer):
 
                     if fr < fvals[0]:
                         if fe is None:
-                            fe = self._eval_points(penalised, [xe], executor)[0]
+                            fe = self._eval_points(
+                                evaluate, [xe], executor, manual_count
+                            )[0]
                         if fe < fr:
                             simplex[-1] = xe
                             fvals[-1] = fe
@@ -361,14 +404,18 @@ class NelderMeadOptimizer(Optimizer):
 
                     if fvals[-2] <= fr < fvals[-1]:
                         if foc is None:
-                            foc = self._eval_points(penalised, [xoc], executor)[0]
+                            foc = self._eval_points(
+                                evaluate, [xoc], executor, manual_count
+                            )[0]
                         if foc <= fr:
                             simplex[-1] = xoc
                             fvals[-1] = foc
                             continue
 
                     if fic is None:
-                        fic = self._eval_points(penalised, [xic], executor)[0]
+                        fic = self._eval_points(
+                            evaluate, [xic], executor, manual_count
+                        )[0]
                     if fic < fvals[-1]:
                         simplex[-1] = xic
                         fvals[-1] = fic
@@ -378,7 +425,9 @@ class NelderMeadOptimizer(Optimizer):
                     new_points = [simplex[0]]
                     for p in simplex[1:]:
                         new_points.append(simplex[0] + self.sigma * (p - simplex[0]))
-                    new_f = self._eval_points(penalised, new_points[1:], executor)
+                    new_f = self._eval_points(
+                        evaluate, new_points[1:], executor, manual_count
+                    )
                     simplex = new_points
                     fvals = [fvals[0]] + list(new_f)
         except EvaluationBudgetExceeded:

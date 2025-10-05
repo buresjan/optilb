@@ -28,4 +28,18 @@ class MissingDependencyError(OptilbError):
         super().__init__(message)
 
 
-__all__ = ["OptilbError", "EvaluationBudgetExceeded", "MissingDependencyError"]
+class UnknownObjectiveError(OptilbError, ValueError):
+    """Raised when an objective identifier is not recognised."""
+
+
+class UnknownOptimizerError(OptilbError, ValueError):
+    """Raised when an optimizer identifier is not recognised."""
+
+
+__all__ = [
+    "OptilbError",
+    "EvaluationBudgetExceeded",
+    "MissingDependencyError",
+    "UnknownObjectiveError",
+    "UnknownOptimizerError",
+]

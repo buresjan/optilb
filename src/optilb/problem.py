@@ -9,6 +9,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from .core import Constraint, DesignSpace, OptResult
+from .exceptions import UnknownOptimizerError
 from .optimizers import (
     BFGSOptimizer,
     EarlyStopper,
@@ -54,35 +55,44 @@ class _EvalCap:
 class OptimizationProblem:
     """Unified façade to run different local optimisers.
 
-    Parameters
-    ----------
-    objective:
-        Objective function returning a scalar value.
-    space:
-        Continuous design space defining variable bounds.
-    x0:
-        Starting point for the search.
-    optimizer:
-        Optimiser name or instance. Supported names are ``"bfgs"``,
-        ``"nelder-mead"`` and ``"mads"``. If an instance is provided it is
-        used directly.
-    constraints:
-        Optional sequence of constraints.
-    parallel:
-        Evaluate independent points concurrently where supported.
-    normalize:
-        Whether to operate in the unit hypercube when supported. ``None`` keeps
-        the optimiser's default.
-    max_iter, tol, seed:
-        Common optimisation controls forwarded to the underlying optimiser.
-    max_evals:
-        Hard cap on objective evaluations. When reached, the best known point is
-        returned and ``early_stopped`` is set in the log.
-    optimizer_options:
-        Keyword arguments used to construct the optimiser when *optimizer* is a
-        string identifier.
-    optimize_options:
-        Extra keyword arguments forwarded to ``optimizer.optimize``.
+    Args:
+        objective: Objective function returning a scalar value.
+        space: Continuous design space defining variable bounds.
+        x0: Starting point for the search.
+        optimizer: Optimiser name or instance. Supported names are
+            ``"bfgs"``, ``"nelder-mead"`` and ``"mads"``. If an instance is
+            provided it is used directly.
+        constraints: Optional sequence of constraints.
+        parallel: Evaluate independent points concurrently where supported.
+        normalize: Whether to operate in the unit hypercube when supported.
+            ``None`` keeps the optimiser's default.
+        max_iter: Maximum number of iterations.
+        tol: Convergence tolerance.
+        seed: Random seed for reproducibility.
+        max_evals: Hard cap on objective evaluations. When reached, the best
+            known point is returned and ``early_stopped`` is set in the log.
+        early_stopper: Optional early stopping controller.
+        verbose: Emit progress information.
+        optimizer_options: Keyword arguments used to construct the optimiser
+            when ``optimizer`` is a string identifier.
+        optimize_options: Extra keyword arguments forwarded to
+            ``optimizer.optimize``.
+
+    Returns:
+        None
+
+    Raises:
+        ValueError: If an unknown optimizer name is provided.
+
+    Examples:
+        >>> from optilb.core import DesignSpace
+        >>> def sphere(x):
+        ...     return float((x ** 2).sum())
+        >>> space = DesignSpace(lower=[-1, -1], upper=[1, 1])
+        >>> problem = OptimizationProblem(objective=sphere, space=space, x0=[0.5, 0.5])
+        >>> result = problem.run()
+        >>> result.best_x.round(1)
+        array([0., 0.])
     """
 
     def __init__(
@@ -129,7 +139,7 @@ class OptimizationProblem:
             elif key == "mads":
                 self.optimizer = MADSOptimizer(**opt_opts)
             else:  # pragma: no cover - defensive
-                raise ValueError(f"Unknown optimizer '{optimizer}'")
+                raise UnknownOptimizerError(f"Unknown optimizer '{optimizer}'")
         else:
             self.optimizer = optimizer
             if opt_opts:
@@ -165,7 +175,7 @@ class OptimizationProblem:
         """Execute the optimisation and return the result."""
 
         if self.max_evals == 0:
-            x0 = np.asarray(self.x0, dtype=float)
+            x0 = self.optimizer._validate_x0(self.x0, self.space)
             self.optimizer.reset_history()
             self.optimizer.record(x0, tag="start")
             self.optimizer.record(x0, tag="cap")

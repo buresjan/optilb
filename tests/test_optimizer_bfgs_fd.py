@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 
 import numpy as np
@@ -50,3 +51,33 @@ def test_bfgs_fd_parallel_speed() -> None:
     t_par = time.perf_counter() - t0
 
     assert t_par < t_seq
+
+
+def test_bfgs_parallel_respects_max_evals() -> None:
+    ds = DesignSpace(lower=-5 * np.ones(2), upper=5 * np.ones(2))
+    x0 = np.array([2.5, -1.5])
+    opt = BFGSOptimizer(fd_eps=1e-5, n_workers=4)
+
+    counter = 0
+    counter_lock = threading.Lock()
+
+    def counted_quadratic(x: np.ndarray) -> float:
+        nonlocal counter
+        with counter_lock:
+            counter += 1
+        time.sleep(0.01)
+        return float(np.sum((x - 1.0) ** 2))
+
+    max_evals = 8
+    res = opt.optimize(
+        counted_quadratic,
+        x0,
+        ds,
+        max_iter=20,
+        max_evals=max_evals,
+        parallel=True,
+    )
+
+    assert res.nfev <= max_evals
+    assert counter <= max_evals
+    assert opt.last_budget_exhausted is True

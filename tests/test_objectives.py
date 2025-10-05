@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-import numpy as np
+from typing import Callable
 
+import numpy as np
+import pytest
+
+from optilb import UnknownObjectiveError
 from optilb.objectives import (
     get_objective,
     lbm_stub,
@@ -57,13 +61,36 @@ def test_step_rastrigin_floor() -> None:
     assert f(x) == expected
 
 
-def test_get_objective_dispatch() -> None:
-    f = get_objective("quadratic")
-    assert f(np.array([0.0])) == 0.0
-    f2 = get_objective("noisy_discontinuous", sigma=0.0)
-    assert f2(np.array([0.3])) == 0.0
-    f3 = get_objective("lbm_stub")
-    assert f3(np.array([0.1, 0.2])) == lbm_stub(np.array([0.1, 0.2]))
-    assert callable(get_objective("spiky_sine"))
-    assert callable(get_objective("checkerboard"))
-    assert callable(get_objective("step_rastrigin"))
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("quadratic", quadratic_bowl),
+        ("rastrigin", rastrigin),
+        ("plateau_cliff", plateau_cliff),
+        ("lbm", lbm_stub),
+        ("lbm_stub", lbm_stub),
+    ],
+)
+def test_get_objective_dispatch(
+    name: str, expected: Callable[[np.ndarray], float]
+) -> None:
+    assert get_objective(name) is expected
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "noisy_discontinuous",
+        "spiky_sine",
+        "checkerboard",
+        "step_rastrigin",
+        "noisy_step_rastrigin",
+    ],
+)
+def test_get_objective_factory_dispatch(name: str) -> None:
+    assert callable(get_objective(name))
+
+
+def test_get_objective_unknown() -> None:
+    with pytest.raises(UnknownObjectiveError):
+        get_objective("does-not-exist")
