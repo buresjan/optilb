@@ -50,9 +50,11 @@ Built-in optimisers
   ``parallel=True``.
 * :class:`optilb.optimizers.NelderMeadOptimizer` – derivative-free simplex search
   with optional normalisation and process-based parallelism. Objectives and
-  constraints must be picklable when running with ``parallel=True``. The
-  optimiser resamples the simplex after each iteration and honours constraint
-  callbacks by applying the configured penalty.
+  constraints must be picklable when running with ``parallel=True``. Set
+  ``parallel_poll_points=True`` to speculatively evaluate reflection / expansion
+  / contraction candidates each iteration (trading extra objective calls for
+  lower latency). The optimiser resamples the simplex after each iteration and
+  honours constraint callbacks by applying the configured penalty.
 * :class:`optilb.optimizers.MADSOptimizer` – interfaces with NOMAD's Mesh
   Adaptive Direct Search via the ``PyNomadBBO`` package. Pass ``normalize=True``
   to work in the unit cube (finite, non-degenerate bounds required). Provide

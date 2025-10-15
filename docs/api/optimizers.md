@@ -36,7 +36,9 @@ print(result.best_x, result.best_f, result.nfev)
   SciPy and history is mapped back afterwards.
 - `NelderMeadOptimizer` – derivative-free simplex search supporting optional
   normalisation and multi-process evaluation of simplex vertices. Objectives and
-  constraints must be picklable when `parallel=True`.
+  constraints must be picklable when `parallel=True`. Set `parallel_poll_points=True`
+  to speculatively score reflection / expansion / contraction candidates together
+  when running in parallel.
 - `MADSOptimizer` – interfaces with NOMAD's Mesh Adaptive Direct Search via the
   external `PyNomadBBO` package. Use `n_workers` to control NOMAD's evaluation
   threads and `normalize=True` to operate in the unit cube (finite bounds

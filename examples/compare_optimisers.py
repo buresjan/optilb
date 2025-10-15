@@ -76,6 +76,14 @@ def run_benchmark() -> None:
                     NelderMeadOptimizer(n_workers=4),
                     True,
                 ),
+                (
+                    "Nelder-Mead (parallel poll)",
+                    NelderMeadOptimizer(
+                        n_workers=4,
+                        parallel_poll_points=True,
+                    ),
+                    True,
+                ),
             ]
             for name, opt, parallel in configs:
                 if opt is None:

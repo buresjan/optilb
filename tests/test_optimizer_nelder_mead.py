@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import multiprocessing as mp
 import time
+from concurrent.futures import Executor
+from typing import Callable, Iterable
 
 import numpy as np
 import pytest
@@ -30,6 +32,42 @@ def capped_objective(x: np.ndarray) -> float:
 def slow_objective(x: np.ndarray) -> float:
     time.sleep(0.1)
     return float(np.sum(x**2))
+
+
+class RecordingNelderMead(NelderMeadOptimizer):
+    """Test helper that records batch sizes passed to _eval_points."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.batch_sizes: list[int] = []
+
+    def _eval_points(  # type: ignore[override]
+        self,
+        func: Callable[[np.ndarray], float],
+        points: Iterable[np.ndarray],
+        executor: Executor | None,
+        manual_count: bool,
+    ) -> list[float]:
+        pts_list = list(points)
+        self.batch_sizes.append(len(pts_list))
+        return super()._eval_points(func, pts_list, executor, manual_count)
+
+
+def test_nm_parallel_poll_points_batches() -> None:
+    ds = DesignSpace(lower=-5 * np.ones(2), upper=5 * np.ones(2))
+    x0 = np.array([1.0, 1.0])
+    obj = get_objective("quadratic")
+
+    baseline = RecordingNelderMead(n_workers=2)
+    res_base = baseline.optimize(obj, x0, ds, max_iter=2, parallel=True)
+    assert 4 not in baseline.batch_sizes
+
+    speculative = RecordingNelderMead(n_workers=2, parallel_poll_points=True)
+    res_spec = speculative.optimize(obj, x0, ds, max_iter=2, parallel=True)
+    assert 4 in speculative.batch_sizes
+
+    np.testing.assert_allclose(res_base.best_x, res_spec.best_x, atol=1e-6)
+    assert res_base.best_f == pytest.approx(res_spec.best_f, abs=1e-12)
 
 
 def test_nm_quadratic_dims() -> None:

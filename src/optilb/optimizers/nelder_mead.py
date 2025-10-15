@@ -107,7 +107,10 @@ class NelderMeadOptimizer(Optimizer):
 
     Set ``normalize=True`` to perform the optimisation in the unit hypercube,
     mapping inputs/outputs accordingly. This makes default step/coefficients
-    scale-independent.
+    scale-independent.  Set ``parallel_poll_points=True`` to pre-compute the
+    reflection / expansion / contraction candidates each iteration while running
+    in parallel. This trades extra objective evaluations for lower iteration
+    latency on expensive objectives.
     """
 
     # ------------------------------------------------------------------
@@ -124,6 +127,7 @@ class NelderMeadOptimizer(Optimizer):
         no_improv_break: int = 10,
         penalty: float = 1e12,
         n_workers: int | None = None,
+        parallel_poll_points: bool = False,
     ) -> None:
         super().__init__()
 
@@ -139,6 +143,7 @@ class NelderMeadOptimizer(Optimizer):
 
         # remember desired worker count for the executor
         self.n_workers = n_workers
+        self.parallel_poll_points = parallel_poll_points
         self._history_transform: SpaceTransform | None = None
 
     # ------------------------------------------------------------------
@@ -242,10 +247,12 @@ class NelderMeadOptimizer(Optimizer):
     ) -> OptResult:
         """Run Nelder–Mead optimisation.
 
-        If *parallel* is ``True``, reflection, expansion and both contraction
-        candidates may be evaluated together each iteration, using up to
-        ``n_workers`` processes. When ``normalize=True``, optimisation happens
-        in the unit hypercube and results/history are mapped back.
+        If *parallel* is ``True``, batches of points are evaluated concurrently
+        using up to ``n_workers`` processes. Enable ``parallel_poll_points``
+        when constructing the optimiser to speculatively score reflection,
+        expansion, and contraction candidates together each iteration. When
+        ``normalize=True``, optimisation happens in the unit hypercube and
+        results/history are mapped back.
         """
         if seed is not None:
             np.random.default_rng(seed)
@@ -373,7 +380,11 @@ class NelderMeadOptimizer(Optimizer):
                     fe: float | None
                     foc: float | None
                     fic: float | None
-                    if parallel and executor is not None:
+                    if (
+                        parallel
+                        and executor is not None
+                        and self.parallel_poll_points
+                    ):
                         fr, fe, foc, fic = self._eval_points(
                             evaluate, [xr, xe, xoc, xic], executor, manual_count
                         )
