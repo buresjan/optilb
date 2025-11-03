@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
+import inspect
 from contextlib import contextmanager
 from functools import partial
 from typing import Callable, Iterable, Iterator, Sequence, cast
@@ -450,13 +451,25 @@ class NelderMeadOptimizer(Optimizer):
                     pt = x0.copy()
                     pt[i] += step[i]
                     simplex.append(pt)
-                fvals = self._eval_points(
-                    evaluate,
-                    simplex,
-                    executor,
-                    manual_count,
-                    map_input=eval_map,
-                )
+                # Backwards compatibility: tests may override _eval_points without
+                # accepting the `map_input` keyword.
+                _ep_params = inspect.signature(self._eval_points).parameters
+                _supports_map_kw = "map_input" in _ep_params
+                if _supports_map_kw:
+                    fvals = self._eval_points(
+                        evaluate,
+                        simplex,
+                        executor,
+                        manual_count,
+                        map_input=eval_map,
+                    )
+                else:
+                    fvals = self._eval_points(
+                        evaluate,
+                        simplex,
+                        executor,
+                        manual_count,
+                    )
 
                 best = min(fvals)
                 no_improv = 0
@@ -502,21 +515,37 @@ class NelderMeadOptimizer(Optimizer):
                         and executor is not None
                         and self.parallel_poll_points
                     ):
-                        fr, fe, foc, fic = self._eval_points(
-                            evaluate,
-                            [xr, xe, xoc, xic],
-                            executor,
-                            manual_count,
-                            map_input=eval_map,
-                        )
+                        if _supports_map_kw:
+                            fr, fe, foc, fic = self._eval_points(
+                                evaluate,
+                                [xr, xe, xoc, xic],
+                                executor,
+                                manual_count,
+                                map_input=eval_map,
+                            )
+                        else:
+                            fr, fe, foc, fic = self._eval_points(
+                                evaluate,
+                                [xr, xe, xoc, xic],
+                                executor,
+                                manual_count,
+                            )
                     else:
-                        fr = self._eval_points(
-                            evaluate,
-                            [xr],
-                            executor,
-                            manual_count,
-                            map_input=eval_map,
-                        )[0]
+                        if _supports_map_kw:
+                            fr = self._eval_points(
+                                evaluate,
+                                [xr],
+                                executor,
+                                manual_count,
+                                map_input=eval_map,
+                            )[0]
+                        else:
+                            fr = self._eval_points(
+                                evaluate,
+                                [xr],
+                                executor,
+                                manual_count,
+                            )[0]
                         fe = foc = fic = None
 
                     # Decision tree (textbook Nelder–Mead)
@@ -527,13 +556,21 @@ class NelderMeadOptimizer(Optimizer):
 
                     if fr < fvals[0]:
                         if fe is None:
-                            fe = self._eval_points(
-                                evaluate,
-                                [xe],
-                                executor,
-                                manual_count,
-                                map_input=eval_map,
-                            )[0]
+                            if _supports_map_kw:
+                                fe = self._eval_points(
+                                    evaluate,
+                                    [xe],
+                                    executor,
+                                    manual_count,
+                                    map_input=eval_map,
+                                )[0]
+                            else:
+                                fe = self._eval_points(
+                                    evaluate,
+                                    [xe],
+                                    executor,
+                                    manual_count,
+                                )[0]
                         if fe < fr:
                             simplex[-1] = xe
                             fvals[-1] = fe
@@ -544,26 +581,42 @@ class NelderMeadOptimizer(Optimizer):
 
                     if fvals[-2] <= fr < fvals[-1]:
                         if foc is None:
-                            foc = self._eval_points(
-                                evaluate,
-                                [xoc],
-                                executor,
-                                manual_count,
-                                map_input=eval_map,
-                            )[0]
+                            if _supports_map_kw:
+                                foc = self._eval_points(
+                                    evaluate,
+                                    [xoc],
+                                    executor,
+                                    manual_count,
+                                    map_input=eval_map,
+                                )[0]
+                            else:
+                                foc = self._eval_points(
+                                    evaluate,
+                                    [xoc],
+                                    executor,
+                                    manual_count,
+                                )[0]
                         if foc <= fr:
                             simplex[-1] = xoc
                             fvals[-1] = foc
                             continue
 
                     if fic is None:
-                        fic = self._eval_points(
-                            evaluate,
-                            [xic],
-                            executor,
-                            manual_count,
-                            map_input=eval_map,
-                        )[0]
+                        if _supports_map_kw:
+                            fic = self._eval_points(
+                                evaluate,
+                                [xic],
+                                executor,
+                                manual_count,
+                                map_input=eval_map,
+                            )[0]
+                        else:
+                            fic = self._eval_points(
+                                evaluate,
+                                [xic],
+                                executor,
+                                manual_count,
+                            )[0]
                     if fic < fvals[-1]:
                         simplex[-1] = xic
                         fvals[-1] = fic
@@ -573,13 +626,21 @@ class NelderMeadOptimizer(Optimizer):
                     new_points = [simplex[0]]
                     for p in simplex[1:]:
                         new_points.append(simplex[0] + self.sigma * (p - simplex[0]))
-                    new_f = self._eval_points(
-                        evaluate,
-                        new_points[1:],
-                        executor,
-                        manual_count,
-                        map_input=eval_map,
-                    )
+                    if _supports_map_kw:
+                        new_f = self._eval_points(
+                            evaluate,
+                            new_points[1:],
+                            executor,
+                            manual_count,
+                            map_input=eval_map,
+                        )
+                    else:
+                        new_f = self._eval_points(
+                            evaluate,
+                            new_points[1:],
+                            executor,
+                            manual_count,
+                        )
                     simplex = new_points
                     fvals = [fvals[0]] + list(new_f)
         except EvaluationBudgetExceeded:
