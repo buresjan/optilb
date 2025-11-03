@@ -88,6 +88,29 @@ class Constraint:
 
 
 @dataclass(slots=True, frozen=True)
+class EvaluationRecord:
+    """Single objective evaluation with the associated design point."""
+
+    x: np.ndarray
+    value: float
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def __post_init__(self) -> None:
+        arr = np.asarray(self.x, dtype=float).copy()
+        arr.setflags(write=False)
+        object.__setattr__(self, "x", arr)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, EvaluationRecord):
+            return False
+        return (
+            np.array_equal(self.x, other.x)
+            and self.value == other.value
+            and self.timestamp == other.timestamp
+        )
+
+
+@dataclass(slots=True, frozen=True)
 class OptResult:
     """Result of an optimisation run.
 
@@ -97,6 +120,7 @@ class OptResult:
     best_x: np.ndarray
     best_f: float
     history: Sequence[DesignPoint] = field(default_factory=tuple)
+    evaluations: Sequence[EvaluationRecord] = field(default_factory=tuple)
     nfev: int = 0
 
     def __post_init__(self) -> None:
@@ -105,6 +129,8 @@ class OptResult:
         object.__setattr__(self, "best_x", arr)
         if not isinstance(self.history, tuple):
             object.__setattr__(self, "history", tuple(self.history))
+        if not isinstance(self.evaluations, tuple):
+            object.__setattr__(self, "evaluations", tuple(self.evaluations))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, OptResult):
@@ -113,5 +139,6 @@ class OptResult:
             np.array_equal(self.best_x, other.best_x)
             and self.best_f == other.best_f
             and self.history == other.history
+            and self.evaluations == other.evaluations
             and self.nfev == other.nfev
         )

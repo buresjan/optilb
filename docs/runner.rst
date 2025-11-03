@@ -43,5 +43,6 @@ to avoid cross-talk between stages.
   running :class:`optilb.optimizers.BFGSOptimizer` so that step sizes shrink
   across levels.
 
-``run_with_schedule`` combines the history from every level and returns a single
-:class:`~optilb.OptResult` with the best design found and total evaluation count.
+``run_with_schedule`` combines the history and evaluation log from every level
+and returns a single :class:`~optilb.OptResult` with the best design found and
+total evaluation count.

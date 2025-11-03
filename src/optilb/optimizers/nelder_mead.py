@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from functools import partial
@@ -128,8 +129,9 @@ class NelderMeadOptimizer(Optimizer):
         penalty: float = 1e12,
         n_workers: int | None = None,
         parallel_poll_points: bool = False,
+        memoize: bool = False,
     ) -> None:
-        super().__init__()
+        super().__init__(memoize=memoize)
 
         self.step = step
         self.alpha = alpha
@@ -168,6 +170,8 @@ class NelderMeadOptimizer(Optimizer):
         points: Iterable[np.ndarray],
         executor: Executor | None,
         manual_count: bool,
+        *,
+        map_input: Callable[[np.ndarray], np.ndarray] | None = None,
     ) -> list[float]:
         """Evaluate *points* either sequentially or in a process pool.
 
@@ -181,52 +185,153 @@ class NelderMeadOptimizer(Optimizer):
         pts = list(points)
         max_evals = self._max_evals
         truncated = False
+        budget_remaining: int | None = None
         if max_evals is not None:
             remaining = max_evals - self._nfev
             if remaining <= 0:
                 self._budget_exhausted = True
                 raise EvaluationBudgetExceeded(max_evals)
-            if len(pts) > remaining:
-                pts = pts[:remaining]
-                truncated = True
+            budget_remaining = int(remaining)
+
+        # Only handle caching here when we bypass the counting wrapper (process pools).
+        use_cache = self._cache_enabled and manual_count
+        results: list[float | None] = [None] * len(pts)
+        wait_list: list[tuple[int, bytes, threading.Event | None]] = []
+        jobs: list[tuple[int, np.ndarray, np.ndarray, bytes | None, threading.Event | None]] = []
+        local_results: dict[bytes, float] = {}
+
+        def _map_point(pt: np.ndarray) -> np.ndarray:
+            mapped = np.asarray(pt, dtype=float)
+            if map_input is not None:
+                mapped = np.asarray(map_input(mapped), dtype=float)
+            return mapped
+
+        for idx, point in enumerate(pts):
+            mapped = _map_point(point)
+            key: bytes | None = None
+            event: threading.Event | None = None
+            cached_val: float | None = None
+            should_eval = True
+            if use_cache:
+                key = self._make_cache_key(mapped)
+                try:
+                    cached_val, event, should_eval = self._cache_check(
+                        key, wait=False
+                    )
+                except Exception:
+                    cached_val = None
+                    event = None
+                    should_eval = True
+                if not should_eval:
+                    if cached_val is not None:
+                        results[idx] = float(cached_val)
+                    else:
+                        # Another worker is processing this point; wait after dispatch.
+                        wait_list.append((idx, key, event))
+                    continue
+            if budget_remaining is not None:
+                if budget_remaining <= 0:
+                    truncated = True
+                    with self._state_lock:
+                        self._budget_exhausted = True
+                    break
+                budget_remaining -= 1
+                if budget_remaining == 0:
+                    with self._state_lock:
+                        self._budget_exhausted = True
+            jobs.append((idx, point, mapped, key, event))
+
+        def _record_manual(point: np.ndarray, mapped_point: np.ndarray, value: float) -> None:
+            if not manual_count:
+                return
+            arr = np.asarray(point, dtype=float)
+            with self._state_lock:
+                self._last_eval_point = arr.copy()
+            self._record_evaluation(mapped_point, value)
 
         if executor is None:
-            values: list[float] = []
-            for point in pts:
-                val = func(point)
-                values.append(val)
-                self._update_best(point, val)
+            for idx, point, mapped, key, event in jobs:
                 if manual_count:
                     with self._state_lock:
-                        self._last_eval_point = np.asarray(point, dtype=float).copy()
+                        self._nfev += 1
+                try:
+                    val = func(point)
+                except Exception:
+                    if manual_count:
+                        with self._state_lock:
+                            self._nfev = max(0, self._nfev - 1)
+                    if use_cache and key is not None and event is not None:
+                        self._cache_fail(key, event)
+                    raise
+                self._update_best(point, val)
+                _record_manual(point, mapped, val)
+                if use_cache and key is not None:
+                    local_results[key] = float(val)
+                    if np.isfinite(val):
+                        self._cache_complete(key, val, event)
+                    else:
+                        self._cache_fail(key, event)
+                results[idx] = float(val)
             if truncated:
                 assert max_evals is not None
                 self._budget_exhausted = True
                 raise EvaluationBudgetExceeded(max_evals)
-            return values
+        else:
+            if jobs:
+                eval_points = [job[1] for job in jobs]
+                try:
+                    iterator = executor.map(func, eval_points)
+                    for (idx, point, mapped, key, event), val in zip(jobs, iterator):
+                        if manual_count:
+                            with self._state_lock:
+                                self._nfev += 1
+                        try:
+                            self._update_best(point, val)
+                            _record_manual(point, mapped, val)
+                            if use_cache and key is not None:
+                                local_results[key] = float(val)
+                                if np.isfinite(val):
+                                    self._cache_complete(key, val, event)
+                                else:
+                                    self._cache_fail(key, event)
+                            results[idx] = float(val)
+                        except Exception:
+                            if manual_count:
+                                with self._state_lock:
+                                    self._nfev = max(0, self._nfev - 1)
+                            if use_cache and key is not None and event is not None:
+                                self._cache_fail(key, event)
+                            raise
+                except StopIteration:
+                    raise
+                except RuntimeError as exc:
+                    if str(exc) == "generator raised StopIteration":
+                        raise StopIteration from exc
+                    raise
 
-        results: list[float] = []
-        iterator = executor.map(func, pts)
-        try:
-            for point, val in zip(pts, iterator):
-                results.append(val)
-                self._update_best(point, val)
-                if manual_count:
-                    self._nfev += 1
-                    with self._state_lock:
-                        self._last_eval_point = np.asarray(point, dtype=float).copy()
-        except StopIteration:
-            raise
-        except RuntimeError as exc:
-            if str(exc) == "generator raised StopIteration":
-                raise StopIteration from exc
-            raise
+        if use_cache:
+            for idx, key, event in wait_list:
+                if event is not None:
+                    event.wait()
+                val: float | None = None
+                if key in local_results:
+                    val = local_results[key]
+                else:
+                    val = self._cache_value(key)
+                if val is None:
+                    raise RuntimeError("Cache bookkeeping error: missing evaluation result")
+                results[idx] = float(val)
 
         if truncated:
             assert max_evals is not None
             self._budget_exhausted = True
             raise EvaluationBudgetExceeded(max_evals)
-        return results
+
+        for value in results:
+            if value is None:
+                raise RuntimeError("Missing evaluation result")
+
+        return [float(v) for v in results]
 
     # ------------------------------------------------------------------
     def optimize(
@@ -262,10 +367,13 @@ class NelderMeadOptimizer(Optimizer):
         normalize_transform: SpaceTransform | None = None
         self._history_transform = None
 
+        eval_map: Callable[[np.ndarray], np.ndarray] | None = None
+
         if normalize:
             normalize_transform = SpaceTransform(space)
             lower = normalize_transform.lower
             span = normalize_transform.span
+            eval_map = normalize_transform.from_unit
 
             # Wrap objective/constraints for unit space (picklable)
             objective = cast(
@@ -302,7 +410,10 @@ class NelderMeadOptimizer(Optimizer):
         x0 = self._validate_x0(x0, space)
 
         raw_objective = objective
-        counted_objective = self._wrap_objective(raw_objective)
+        counted_objective = self._wrap_objective(
+            raw_objective,
+            map_input=eval_map,
+        )
 
         self.reset_history()
         self._configure_budget(max_evals)
@@ -339,7 +450,13 @@ class NelderMeadOptimizer(Optimizer):
                     pt = x0.copy()
                     pt[i] += step[i]
                     simplex.append(pt)
-                fvals = self._eval_points(evaluate, simplex, executor, manual_count)
+                fvals = self._eval_points(
+                    evaluate,
+                    simplex,
+                    executor,
+                    manual_count,
+                    map_input=eval_map,
+                )
 
                 best = min(fvals)
                 no_improv = 0
@@ -386,11 +503,19 @@ class NelderMeadOptimizer(Optimizer):
                         and self.parallel_poll_points
                     ):
                         fr, fe, foc, fic = self._eval_points(
-                            evaluate, [xr, xe, xoc, xic], executor, manual_count
+                            evaluate,
+                            [xr, xe, xoc, xic],
+                            executor,
+                            manual_count,
+                            map_input=eval_map,
                         )
                     else:
                         fr = self._eval_points(
-                            evaluate, [xr], executor, manual_count
+                            evaluate,
+                            [xr],
+                            executor,
+                            manual_count,
+                            map_input=eval_map,
                         )[0]
                         fe = foc = fic = None
 
@@ -403,7 +528,11 @@ class NelderMeadOptimizer(Optimizer):
                     if fr < fvals[0]:
                         if fe is None:
                             fe = self._eval_points(
-                                evaluate, [xe], executor, manual_count
+                                evaluate,
+                                [xe],
+                                executor,
+                                manual_count,
+                                map_input=eval_map,
                             )[0]
                         if fe < fr:
                             simplex[-1] = xe
@@ -416,7 +545,11 @@ class NelderMeadOptimizer(Optimizer):
                     if fvals[-2] <= fr < fvals[-1]:
                         if foc is None:
                             foc = self._eval_points(
-                                evaluate, [xoc], executor, manual_count
+                                evaluate,
+                                [xoc],
+                                executor,
+                                manual_count,
+                                map_input=eval_map,
                             )[0]
                         if foc <= fr:
                             simplex[-1] = xoc
@@ -425,7 +558,11 @@ class NelderMeadOptimizer(Optimizer):
 
                     if fic is None:
                         fic = self._eval_points(
-                            evaluate, [xic], executor, manual_count
+                            evaluate,
+                            [xic],
+                            executor,
+                            manual_count,
+                            map_input=eval_map,
                         )[0]
                     if fic < fvals[-1]:
                         simplex[-1] = xic
@@ -437,7 +574,11 @@ class NelderMeadOptimizer(Optimizer):
                     for p in simplex[1:]:
                         new_points.append(simplex[0] + self.sigma * (p - simplex[0]))
                     new_f = self._eval_points(
-                        evaluate, new_points[1:], executor, manual_count
+                        evaluate,
+                        new_points[1:],
+                        executor,
+                        manual_count,
+                        map_input=eval_map,
                     )
                     simplex = new_points
                     fvals = [fvals[0]] + list(new_f)
@@ -470,6 +611,7 @@ class NelderMeadOptimizer(Optimizer):
             best_x=best_x,
             best_f=float(best_f),
             history=self.history,
+            evaluations=self.evaluations,
             nfev=self.nfev,
         )
         return result

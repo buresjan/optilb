@@ -51,6 +51,6 @@ Key parameters
 
 When ``max_evals`` is set the objective is wrapped in an evaluation cap. Hitting
 this cap marks the run as early stopped, records the best design seen so far and
-keeps the optimiser history intact. The :class:`optilb.problem.OptimizationLog`
+keeps the optimiser history and evaluation log intact. The :class:`optilb.problem.OptimizationLog`
 accessible via ``problem.log`` contains ``optimizer``, ``runtime``, ``nfev`` and
 ``early_stopped`` fields for quick diagnostics.

@@ -25,8 +25,13 @@ def test_unit_space_noop() -> None:
     assert res_raw.best_f == res_norm.best_f
     assert res_raw.nfev == res_norm.nfev
     assert len(res_raw.history) == len(res_norm.history)
+    assert len(res_raw.evaluations) == res_raw.nfev
+    assert len(res_norm.evaluations) == res_norm.nfev
     for a, b in zip(res_raw.history, res_norm.history):
         np.testing.assert_array_equal(a.x, b.x)
+    for a, b in zip(res_raw.evaluations, res_norm.evaluations):
+        np.testing.assert_array_equal(a.x, b.x)
+        assert a.value == b.value
 
 
 def test_history_in_original_units() -> None:
@@ -43,3 +48,7 @@ def test_history_in_original_units() -> None:
     for pt in res.history:
         assert np.all(pt.x >= ds.lower) and np.all(pt.x <= ds.upper)
         assert np.all(pt.x > 1.0)
+    assert len(res.evaluations) == res.nfev
+    for record in res.evaluations:
+        assert np.all(record.x >= ds.lower) and np.all(record.x <= ds.upper)
+        assert np.all(record.x > 1.0)

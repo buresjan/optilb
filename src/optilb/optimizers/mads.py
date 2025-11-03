@@ -53,8 +53,15 @@ class MADSOptimizer(Optimizer):
         available CPU cores.
     """
 
-    def __init__(self, *, n_workers: int | None = None) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        *,
+        n_workers: int | None = None,
+        memoize: bool = False,
+    ) -> None:
+        if memoize:
+            logger.warning("MADSOptimizer does not support memoize; disabling cache")
+        super().__init__(memoize=False)
         self.n_workers = n_workers
 
     @classmethod
@@ -155,7 +162,7 @@ class MADSOptimizer(Optimizer):
                 return float(user_objective(u))
 
         x0 = self._validate_x0(x0, space)
-        objective = self._wrap_objective(objective_unit)
+        objective = self._wrap_objective(objective_unit, map_input=_unscale)
 
         con_funcs: list[Callable[[np.ndarray], float]] = []
         for c in constraints:
@@ -223,6 +230,7 @@ class MADSOptimizer(Optimizer):
             best_x=best,
             best_f=best_f,
             history=self.history,
+            evaluations=self.evaluations,
             nfev=self.nfev,
         )
         self._clear_budget()

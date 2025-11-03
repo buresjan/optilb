@@ -49,8 +49,9 @@ class BFGSOptimizer(Optimizer):
         step: float | None = None,
         fd_eps: float | Sequence[float] | None = None,
         n_workers: int | None = None,
+        memoize: bool = False,
     ) -> None:
-        super().__init__()
+        super().__init__(memoize=memoize)
         self.gradient = gradient
         self.step = step
         self.fd_eps = fd_eps
@@ -115,7 +116,10 @@ class BFGSOptimizer(Optimizer):
             def obj_unit(u: np.ndarray) -> float:
                 return float(objective(transform.from_unit(u)))
 
-            wrapped_obj = self._wrap_objective(obj_unit)
+            wrapped_obj = self._wrap_objective(
+                obj_unit,
+                map_input=transform.from_unit,
+            )
         else:
             wrapped_obj = self._wrap_objective(objective)
 
@@ -280,6 +284,7 @@ class BFGSOptimizer(Optimizer):
                 best_x=best,
                 best_f=float(best_f if best_f is not None else float("nan")),
                 history=self.history,
+                evaluations=self.evaluations,
                 nfev=self.nfev,
             )
             self._clear_budget()
@@ -295,6 +300,7 @@ class BFGSOptimizer(Optimizer):
                 best_x=best,
                 best_f=float(best_f if best_f is not None else float("nan")),
                 history=self.history,
+                evaluations=self.evaluations,
                 nfev=self.nfev,
             )
             self._clear_budget()
@@ -315,6 +321,7 @@ class BFGSOptimizer(Optimizer):
             best_x=best_x,
             best_f=float(res.fun),
             history=self.history,
+            evaluations=self.evaluations,
             nfev=self.nfev,
         )
         self._clear_budget()

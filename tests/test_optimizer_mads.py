@@ -19,6 +19,7 @@ def test_mads_quadratic_dims() -> None:
         np.testing.assert_allclose(res.best_x, np.zeros(dim), atol=1e-2)
         assert res.best_f == pytest.approx(0.0, abs=1e-5)
         assert len(res.history) >= 1
+        assert len(res.evaluations) == res.nfev
 
 
 def test_mads_plateau_cliff_constraint() -> None:
@@ -35,6 +36,7 @@ def test_mads_plateau_cliff_constraint() -> None:
     )
     assert res.best_x[0] <= 0.0
     assert res.best_f == pytest.approx(1.0, abs=1e-6)
+    assert len(res.evaluations) == res.nfev
 
 
 def test_mads_nfev() -> None:
@@ -44,6 +46,7 @@ def test_mads_nfev() -> None:
     res = opt.optimize(obj, np.array([1.0]), ds, max_iter=20)
     assert res.nfev == opt.nfev
     assert res.nfev >= len(res.history)
+    assert len(res.evaluations) == res.nfev
 
 
 def test_mads_normalize_smoke() -> None:
@@ -59,6 +62,8 @@ def test_mads_normalize_smoke() -> None:
     res2 = opt2.optimize(anisotropic, x0, ds, max_iter=40, seed=0, normalize=True)
     assert res2.best_f <= res1.best_f + 1e-8
     assert res2.nfev <= res1.nfev
+    assert len(res1.evaluations) == res1.nfev
+    assert len(res2.evaluations) == res2.nfev
 
 
 def test_mads_normalize_bounds_validation() -> None:
@@ -102,6 +107,8 @@ def test_mads_normalize_mapping() -> None:
     assert np.all(res.best_x <= ds.upper) and np.all(res.best_x >= ds.lower)
     for call in seen:
         assert np.all(call <= ds.upper) and np.all(call >= ds.lower)
+    for record in res.evaluations:
+        assert np.all(record.x <= ds.upper) and np.all(record.x >= ds.lower)
     assert opt._history_scaled is not None
     assert len(opt._history_scaled) == len(res.history) - 1
     for u in opt._history_scaled:

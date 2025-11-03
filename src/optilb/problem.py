@@ -183,6 +183,7 @@ class OptimizationProblem:
                 best_x=x0,
                 best_f=float("inf"),
                 history=self.optimizer.history,
+                evaluations=self.optimizer.evaluations,
                 nfev=0,
             )
             self.log = OptimizationLog(
@@ -225,6 +226,7 @@ class OptimizationProblem:
                 best_x=best_x,
                 best_f=best_f,
                 history=self.optimizer.history,
+                evaluations=self.optimizer.evaluations,
                 nfev=self.optimizer.nfev,
             )
         runtime = perf_counter() - start

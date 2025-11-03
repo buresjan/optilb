@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from optilb import DesignSpace, OptResult
 from optilb.optimizers import Optimizer
 
 
 class DummyOptimizer(Optimizer):
+    def __init__(self, *, memoize: bool = False) -> None:
+        super().__init__(memoize=memoize)
+
     def optimize(
         self,
         objective,
@@ -35,3 +39,20 @@ def test_dummy_optimizer_history() -> None:
     assert res.best_f == 0.0
     assert len(res.history) == 1
     np.testing.assert_allclose(res.history[0].x, np.zeros(2))
+
+
+def test_counting_function_memoization() -> None:
+    calls = 0
+
+    def obj(x: np.ndarray) -> float:
+        nonlocal calls
+        calls += 1
+        return float(np.sum(x))
+
+    opt = DummyOptimizer(memoize=True)
+    wrapped = opt._wrap_objective(obj)
+    first = wrapped(np.array([0.5, 0.5]))
+    second = wrapped(np.array([0.5, 0.5]))
+    assert first == pytest.approx(second)
+    assert calls == 1
+    assert opt.nfev == 1

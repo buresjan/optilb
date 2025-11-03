@@ -8,10 +8,11 @@ surrogates and robust optimisation utilities are tracked on the issue board, but
 current stack is already useful for plugging CFD/LBM objectives into a common
 pipeline.
 
-- Core dataclasses (`DesignSpace`, `DesignPoint`, `Constraint`, `OptResult`) keep
+- Core dataclasses (`DesignSpace`, `DesignPoint`, `EvaluationRecord`, `Constraint`, `OptResult`) keep
   optimisation metadata tidy and immutable.
 - Optimisers share a lightweight `Optimizer` base that tracks evaluation
-  history, budgets, and supports early stopping hooks.
+  history, per-evaluation logs, optional memoisation of duplicate points,
+  budgets, and supports early stopping hooks.
 - `OptimizationProblem` offers a façade that normalises configuration,
   forwards shared options (`max_evals`, `normalize`, `parallel`, `early_stopper`),
   and records an `OptimizationLog` for comparisons.
@@ -103,3 +104,5 @@ features and progress live in the GitHub issue tracker and project board.
 - `examples/compare_optimisers.py` – benchmark built-in optimisers on toy objectives.
 - `examples/plot_objectives.py` – visualise 2D objective functions.
 - `examples/parallel_speedup.py` – demonstrate parallel Nelder–Mead speed-up on a slow objective.
+- `examples/evaluation_log_demo.py` – capture evaluation logs for Nelder–Mead (and MADS when PyNomad is installed), saving them as `evaluation_log_nm.txt` and `evaluation_log_mads.txt`.
+- `examples/memoization_speedup.py` – compare Nelder–Mead runs with and without memoisation under threaded parallelism.

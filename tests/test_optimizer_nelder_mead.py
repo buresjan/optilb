@@ -132,6 +132,7 @@ def test_nm_nfev() -> None:
     res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=20)
     assert res.nfev == opt.nfev
     assert res.nfev >= len(res.history)
+    assert len(res.evaluations) == res.nfev
 
 
 def test_nm_parallel_nfev() -> None:
@@ -141,6 +142,7 @@ def test_nm_parallel_nfev() -> None:
     res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=20, parallel=True)
     assert res.nfev == opt.nfev
     assert res.nfev >= len(res.history) > 0
+    assert len(res.evaluations) == res.nfev
 
 
 def test_nm_parallel_stopiteration_counts() -> None:
@@ -172,6 +174,7 @@ def test_nm_respects_max_evals() -> None:
         max_evals=10,
     )
     assert res.nfev == 10
+    assert len(res.evaluations) == 10
 
 
 def test_nm_max_evals_best_point_consistent() -> None:
@@ -182,3 +185,65 @@ def test_nm_max_evals_best_point_consistent() -> None:
     res = opt.optimize(obj, x0, ds, max_iter=200, max_evals=2)
     np.testing.assert_allclose(res.best_x, np.array([-2.0, -3.0]))
     assert res.best_f == pytest.approx(np.sum(res.best_x**2), abs=1e-12)
+
+
+def test_nm_normalized_evaluations_in_original_space() -> None:
+    ds = DesignSpace(
+        lower=np.array([5.0, 10.0]),
+        upper=np.array([6.0, 12.0]),
+    )
+    obj = get_objective("quadratic")
+    opt = NelderMeadOptimizer()
+    res = opt.optimize(
+        obj,
+        np.array([5.5, 11.0]),
+        ds,
+        max_iter=10,
+        normalize=True,
+    )
+    assert len(res.evaluations) == res.nfev
+    for record in res.evaluations:
+        assert np.all(record.x >= ds.lower) and np.all(record.x <= ds.upper)
+
+
+def test_nm_memoize_reuses_values() -> None:
+    ds = DesignSpace(lower=np.array([-1.0]), upper=np.array([1.0]))
+    x0 = np.array([0.25])
+
+    call_counter = {"count": 0}
+
+    def sleepy(x: np.ndarray) -> float:
+        call_counter["count"] += 1
+        return float(np.sum(x**2))
+
+    opt_plain = NelderMeadOptimizer(step=0.0)
+    res_plain = opt_plain.optimize(sleepy, x0, ds, max_iter=0, normalize=False)
+    calls_plain = call_counter["count"]
+
+    call_counter["count"] = 0
+    opt_cached = NelderMeadOptimizer(step=0.0, memoize=True)
+    res_cached = opt_cached.optimize(sleepy, x0, ds, max_iter=0, normalize=False)
+
+    assert call_counter["count"] < calls_plain
+    assert res_cached.best_f == pytest.approx(res_plain.best_f)
+    assert res_cached.nfev <= res_plain.nfev
+
+
+def test_nm_parallel_memoize_handles_duplicate_simplex() -> None:
+    ds = DesignSpace(lower=np.array([-1.0, -1.0]), upper=np.array([1.0, 1.0]))
+    x0 = np.array([0.3, -0.2])
+
+    opt = NelderMeadOptimizer(step=0.0, memoize=True, n_workers=2)
+    res = opt.optimize(
+        get_objective("quadratic"),
+        x0,
+        ds,
+        max_iter=0,
+        parallel=True,
+        normalize=False,
+    )
+
+    assert res.nfev == 1
+    assert len(res.evaluations) == 1
+    assert res.best_f == pytest.approx(float(np.sum(x0**2)), abs=1e-12)
+    assert len(opt._cache) == 1

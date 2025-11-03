@@ -3,8 +3,9 @@ Local Optimizers
 
 ``optilb.optimizers`` bundles several local search algorithms that share a
 common :class:`~optilb.optimizers.Optimizer` base class. Each optimiser records
-every evaluated design point and returns an :class:`~optilb.OptResult` containing
-the full history and evaluation count (``nfev``). A shared ``max_evals`` budget
+every evaluated design point and returns an :class:`~optilb.OptResult`
+containing the full history, a complete evaluation log, and the evaluation count
+(``nfev``). A shared ``max_evals`` budget
 is tracked inside the base class; when the budget is reached an
 :class:`optilb.exceptions.EvaluationBudgetExceeded` exception is raised, the
 best-known point is recorded, and façade helpers report the run as
@@ -16,6 +17,9 @@ Common keyword arguments supported by most optimisers:
 * ``max_evals`` – hard evaluation budget (enforced by the base class).
 * ``parallel`` – enable multi-threaded or multi-process execution where supported.
 * ``normalize`` – operate in the unit hypercube and map results back afterwards.
+* ``memoize`` – cache completed evaluations to avoid recomputing the objective
+  when an optimiser revisits the same point. Disabled by default and ignored for
+  backends that cannot share cache state (such as PyNomad).
 * ``early_stopper`` – an :class:`optilb.optimizers.EarlyStopper` instance with
   ``eps``, ``patience``, ``f_target``, ``time_limit`` and ``enabled`` controls.
 
@@ -37,32 +41,40 @@ Common keyword arguments supported by most optimisers:
         parallel=True,
     )
     print(res.best_x, res.best_f, res.nfev)
+    print(len(res.evaluations))
 
 Built-in optimisers
 -------------------
 
 * :class:`optilb.optimizers.BFGSOptimizer` – wraps SciPy's L-BFGS-B. When
   ``normalize=True`` (default) it works in ``[0, 1]^d`` using a
-  :class:`optilb.optimizers.utils.SpaceTransform`, records history in original
+  :class:`optilb.optimizers.utils.SpaceTransform`, records history and evaluations in original
   coordinates, and supports numerical gradients via central differences. Use
   ``fd_eps`` (or the legacy alias ``step``) to set finite-difference steps; pass
   ``n_workers`` to parallelise gradient evaluations with threads when
-  ``parallel=True``.
+  ``parallel=True``. Setting ``memoize=True`` reuses repeated evaluations during
+  finite-difference sweeps.
 * :class:`optilb.optimizers.NelderMeadOptimizer` – derivative-free simplex search
   with optional normalisation and process-based parallelism. Objectives and
   constraints must be picklable when running with ``parallel=True``. Set
   ``parallel_poll_points=True`` to speculatively evaluate reflection / expansion
   / contraction candidates each iteration (trading extra objective calls for
-  lower latency). The optimiser resamples the simplex after each iteration and
-  honours constraint callbacks by applying the configured penalty.
+  lower latency). The optimiser resamples the simplex after each iteration,
+  honours constraint callbacks by applying the configured penalty, and captures
+  every evaluated simplex vertex even in process-based parallel runs.
+  ``memoize=True`` enables a cache that short-circuits duplicate vertices in
+  sequential and thread-based execution.
 * :class:`optilb.optimizers.MADSOptimizer` – interfaces with NOMAD's Mesh
   Adaptive Direct Search via the ``PyNomadBBO`` package. Pass ``normalize=True``
   to work in the unit cube (finite, non-degenerate bounds required). Provide
-  ``n_workers`` to limit NOMAD's parallel evaluation threads.
+  ``n_workers`` to limit NOMAD's parallel evaluation threads. All evaluations
+  reported by NOMAD are stored in original coordinates for post-analysis.
+  Memoisation is currently ignored because evaluations are handled entirely by
+  PyNomad.
 * :class:`optilb.optimizers.EarlyStopper` – utility to halt optimisation when
   progress stalls. Reset it between runs (handled automatically by
   :class:`optilb.problem.OptimizationProblem` and
   :func:`optilb.runner.run_with_schedule`).
 
-All optimisers expose the ``history`` property and ``budget_exhausted`` flag on
-the base class. Use them to inspect the run after calling ``optimize``.
+All optimisers expose ``history``, ``evaluations`` and the ``budget_exhausted``
+flag on the base class. Use them to inspect the run after calling ``optimize``.

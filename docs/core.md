@@ -29,6 +29,20 @@ p = DesignPoint([0.2, 0.4], tag="lhs")
 print(p.tag, p.timestamp.isoformat())
 ```
 
+## EvaluationRecord
+
+`EvaluationRecord` represents a single objective evaluation, storing the design
+vector, the resulting objective value, and a timestamp. Optimisers use it to
+expose a full evaluation log (with coordinates already mapped back to the
+original design space).
+
+```python
+from optilb.core import EvaluationRecord
+
+record = EvaluationRecord(x=[0.1, 0.2], value=1.5)
+print(record.value)
+```
+
 ## Constraint
 
 `Constraint` wraps a call-back accepting a NumPy array and returning either a
@@ -43,14 +57,17 @@ box = Constraint(lambda x: (x[0]**2 + x[1]**2) <= 1.0, name="unit_disc")
 ## OptResult
 
 `OptResult` is returned by every optimiser. It stores the best design vector,
-its objective value, the full evaluation history, and the number of objective
-evaluations (`nfev`). The `best_x` array is returned as a read-only view.
+its objective value, the full history, a complete evaluation log (as
+`EvaluationRecord` instances), and the number of objective evaluations (`nfev`).
+The `best_x` array is returned as a read-only view.
 
 ```python
 from optilb import OptResult
 
 res = OptResult(best_x=[0.0, 0.0], best_f=0.0)
 print(res.best_x.flags.writeable)  # False
+for record in res.evaluations:
+    print(record.x, record.value)
 ```
 
 ## OptimizationLog

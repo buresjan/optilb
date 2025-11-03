@@ -7,10 +7,13 @@ results. They are re-exported at package level for convenience.
   `dimension` property and read-only `lower`/`upper` arrays.
 - `DesignPoint(x, tag=None, timestamp=None)` – records optimisation samples with
   immutable coordinates.
+- `EvaluationRecord(x, value, timestamp=None)` – captures a single objective
+  evaluation in the original design space.
 - `Constraint(func, name=None)` – wraps boolean/penalty callbacks and is
   callable.
-- `OptResult(best_x, best_f, history=(), nfev=0)` – stores the outcome of an
-  optimiser run with a tuple of `DesignPoint` history.
+- `OptResult(best_x, best_f, history=(), evaluations=(), nfev=0)` – stores the
+  outcome of an optimiser run with tuples of `DesignPoint` history and
+  `EvaluationRecord` evaluations.
 - `OptimizationLog(optimizer, runtime, nfev, early_stopped=False)` – summarises a
   façade run and is attached to `OptimizationProblem.log`.
 - `EvaluationBudgetExceeded(max_evals)` – raised when an optimiser reaches the

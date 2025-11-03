@@ -17,6 +17,7 @@ def test_bfgs_quadratic_dims() -> None:
         np.testing.assert_allclose(res.best_x, np.zeros(dim), atol=1e-5)
         assert res.best_f == pytest.approx(0.0, abs=1e-8)
         assert len(res.history) >= 1
+        assert len(res.evaluations) == res.nfev
 
 
 def test_bfgs_rastrigin_origin() -> None:
@@ -47,6 +48,7 @@ def test_bfgs_nfev() -> None:
     res = opt.optimize(obj, np.array([1.0, 1.0]), ds, max_iter=10)
     assert res.nfev == opt.nfev
     assert res.nfev >= len(res.history)
+    assert len(res.evaluations) == res.nfev
 
 
 def test_bfgs_respects_max_evals() -> None:
@@ -61,6 +63,7 @@ def test_bfgs_respects_max_evals() -> None:
         max_evals=15,
     )
     assert res.nfev <= 15
+    assert len(res.evaluations) == res.nfev
 
 
 def test_bfgs_zero_max_evals() -> None:
@@ -72,3 +75,4 @@ def test_bfgs_zero_max_evals() -> None:
     assert res.nfev == 0
     np.testing.assert_allclose(res.best_x, x0)
     assert opt.last_budget_exhausted is True
+    assert len(res.evaluations) == 0

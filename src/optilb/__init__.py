@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .core import Constraint, DesignPoint, DesignSpace, OptResult
+from .core import Constraint, DesignPoint, DesignSpace, EvaluationRecord, OptResult
 from .exceptions import (
     EvaluationBudgetExceeded,
     MissingDependencyError,
@@ -25,6 +25,7 @@ __all__ = [
     "__version__",
     "DesignSpace",
     "DesignPoint",
+    "EvaluationRecord",
     "Constraint",
     "OptResult",
     "Optimizer",

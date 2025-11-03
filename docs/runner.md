@@ -39,5 +39,6 @@ print(res.best_x, res.best_f, res.nfev)
 - `bfgs_eps_scale` rescales the finite-difference step (`fd_eps`) when running
   `BFGSOptimizer` so that step sizes shrink across levels.
 
-`run_with_schedule` combines the history from every level and returns a single
-`OptResult` with the best design found and total evaluation count.
+`run_with_schedule` combines the history and evaluation log from every level and
+returns a single `OptResult` with the best design found and total evaluation
+count.

@@ -2,7 +2,7 @@ Core API
 ========
 
 .. automodule:: optilb.core
-    :members: DesignSpace, DesignPoint, Constraint, OptResult
+    :members: DesignSpace, DesignPoint, EvaluationRecord, Constraint, OptResult
     :undoc-members:
 
 .. automodule:: optilb.problem

@@ -2,10 +2,12 @@
 
 `optilb.optimizers` defines the common `Optimizer` base class that all local
 search methods implement. It tracks an evaluation counter, optional budgets
-(`max_evals`), and records a tuple of `DesignPoint` instances that can be
-inspected through the `history` property. When a budget is exhausted an
-`EvaluationBudgetExceeded` exception is raised; façade helpers catch it and
-surface the best-known point while marking the run as early stopped.
+(`max_evals`), and records both a tuple of `DesignPoint` instances (via
+`history`) and a full evaluation log (via `evaluations`, holding
+`EvaluationRecord` objects). When enabled with `memoize=True`, the base class can
+cache objective values for repeated points (where supported). When a budget is
+exhausted an `EvaluationBudgetExceeded` exception is raised; façade helpers catch
+it and surface the best-known point while marking the run as early stopped.
 
 `EarlyStopper` provides patience-, target-, and time-based stopping criteria and
 is safe to reuse once `reset()` has been called (handled automatically by
@@ -33,18 +35,25 @@ print(result.best_x, result.best_f, result.nfev)
   to central differences with step size `fd_eps` (or legacy alias `step`);
   setting `n_workers` allows threaded gradient evaluations when `parallel=True`.
   With `normalize=True` the design space is mapped to `[0, 1]^d` before calling
-  SciPy and history is mapped back afterwards.
+  SciPy and history/evaluations are mapped back afterwards. Enable memoisation
+  via `memoize=True` to reuse duplicate evaluations encountered during
+  finite-difference passes.
 - `NelderMeadOptimizer` – derivative-free simplex search supporting optional
   normalisation and multi-process evaluation of simplex vertices. Objectives and
-  constraints must be picklable when `parallel=True`. Set `parallel_poll_points=True`
-  to speculatively score reflection / expansion / contraction candidates together
-  when running in parallel.
+  constraints must be picklable when `parallel=True`. Set
+  `parallel_poll_points=True` to speculatively score reflection / expansion /
+  contraction candidates together when running in parallel. All evaluated simplex
+  vertices are captured in `evaluations`, even when running across processes.
+  With `memoize=True`, duplicate vertices are short-circuited in sequential and
+  thread-based executions (process pools fall back to uncached behaviour).
 - `MADSOptimizer` – interfaces with NOMAD's Mesh Adaptive Direct Search via the
   external `PyNomadBBO` package. Use `n_workers` to control NOMAD's evaluation
   threads and `normalize=True` to operate in the unit cube (finite bounds
-  required).
+  required). Reported evaluations are converted back to the original space
+  before being logged. Memoisation requests are ignored because evaluations are
+  delegated to PyNomad.
 
 All optimisers accept a `parallel` flag, `max_iter`, `max_evals`, `tol`, `seed`
-(where applicable), and optional constraint callbacks. History and the
-`budget_exhausted` flag can be inspected after a run to understand whether the
-solver terminated naturally or due to limits.
+(where applicable), and optional constraint callbacks. History, `evaluations`,
+and the `budget_exhausted` flag can be inspected after a run to understand
+whether the solver terminated naturally or due to limits.

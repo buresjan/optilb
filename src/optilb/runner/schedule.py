@@ -6,7 +6,7 @@ from typing import Any, Sequence, cast
 
 import numpy as np
 
-from ..core import DesignPoint, OptResult
+from ..core import DesignPoint, EvaluationRecord, OptResult
 from ..optimizers.base import Optimizer
 from ..optimizers.early_stop import EarlyStopper
 
@@ -79,6 +79,7 @@ def run_with_schedule(
 
     incumbent_x = np.asarray(x0, dtype=float)
     all_history: list[DesignPoint] = []
+    all_evaluations: list[EvaluationRecord] = []
     total_nfev = 0
     best_x = incumbent_x.copy()
     best_f = float("inf")
@@ -124,6 +125,7 @@ def run_with_schedule(
         )
 
         all_history.extend(res.history)
+        all_evaluations.extend(res.evaluations)
         total_nfev += res.nfev
         if res.best_f < best_f:
             best_f = res.best_f
@@ -134,5 +136,6 @@ def run_with_schedule(
         best_x=best_x,
         best_f=best_f,
         history=tuple(all_history),
+        evaluations=tuple(all_evaluations),
         nfev=total_nfev,
     )

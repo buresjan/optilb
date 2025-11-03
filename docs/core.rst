@@ -33,6 +33,21 @@ instances.
     p = DesignPoint([0.2, 0.4], tag="lhs")
     print(p.tag, p.timestamp.isoformat())
 
+EvaluationRecord
+----------------
+
+``EvaluationRecord`` represents a single objective evaluation, storing the
+design vector, the resulting objective value, and a timestamp. Optimisers expose
+complete evaluation logs as sequences of ``EvaluationRecord`` objects with
+coordinates already mapped back to the original design space.
+
+.. code-block:: python
+
+    from optilb.core import EvaluationRecord
+
+    record = EvaluationRecord(x=[0.1, 0.2], value=1.5)
+    print(record.value)
+
 Constraint
 ----------
 
@@ -49,8 +64,9 @@ OptResult
 ---------
 
 ``OptResult`` is returned by every optimiser. It stores the best design vector,
-its objective value, the full evaluation history, and the number of objective
-evaluations (``nfev``). The ``best_x`` array is returned as a read-only view.
+its objective value, the full history, a complete evaluation log (as
+``EvaluationRecord`` instances), and the number of objective evaluations
+(``nfev``). The ``best_x`` array is returned as a read-only view.
 
 .. code-block:: python
 
@@ -58,6 +74,8 @@ evaluations (``nfev``). The ``best_x`` array is returned as a read-only view.
 
     res = OptResult(best_x=[0.0, 0.0], best_f=0.0)
     print(res.best_x.flags.writeable)  # False
+    for record in res.evaluations:
+        print(record.x, record.value)
 
 OptimizationLog
 ---------------
