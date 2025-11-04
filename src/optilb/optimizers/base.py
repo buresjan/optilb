@@ -61,7 +61,7 @@ class _CountingFunction:
             optimizer._nfev += 1
         try:
             val = float(self.func(x))
-        except Exception:
+        except BaseException:
             with optimizer._state_lock:
                 optimizer._nfev = max(0, optimizer._nfev - 1)
             if use_cache and cache_key is not None:

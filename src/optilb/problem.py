@@ -33,7 +33,7 @@ class OptimizationLog:
 
 @dataclass(slots=True)
 class _EvalCap:
-    """Objective wrapper enforcing a maximum number of evaluations."""
+    """Deprecated: no longer used (kept for backward compatibility)."""
 
     func: Callable[[np.ndarray], float]
     limit: int
@@ -41,7 +41,7 @@ class _EvalCap:
     best_f: float = field(default=float("inf"), init=False)
     best_x: np.ndarray | None = field(default=None, init=False)
 
-    def __call__(self, x: np.ndarray) -> float:
+    def __call__(self, x: np.ndarray) -> float:  # pragma: no cover - legacy
         if self.calls >= self.limit:
             raise StopIteration
         val = float(self.func(x))
@@ -197,38 +197,18 @@ class OptimizationProblem:
 
         kwargs = self._build_optimize_kwargs()
         objective: Callable[[np.ndarray], float] = self.objective
-        capper: _EvalCap | None = None
-        if self.max_evals is not None:
-            capper = _EvalCap(objective, self.max_evals)
-            objective = capper
-
+        # Note: evaluation budgets are enforced by the optimizer itself.
+        # Avoid wrapping the objective to keep behavior consistent across
+        # threads/processes and prevent cross-process state divergence.
         start = perf_counter()
         early = False
-        try:
-            res = self.optimizer.optimize(
-                objective=objective,
-                x0=self.x0,
-                space=self.space,
-                constraints=self.constraints,
-                **kwargs,
-            )
-        except StopIteration:
-            early = True
-            assert capper is not None
-            best_x = capper.best_x
-            best_f = capper.best_f
-            if best_x is None:
-                best_x = np.asarray(self.x0, dtype=float)
-            best_f = float(best_f)
-            self.optimizer.finalize_history()
-            self.optimizer.record(best_x, tag="cap")
-            res = OptResult(
-                best_x=best_x,
-                best_f=best_f,
-                history=self.optimizer.history,
-                evaluations=self.optimizer.evaluations,
-                nfev=self.optimizer.nfev,
-            )
+        res = self.optimizer.optimize(
+            objective=objective,
+            x0=self.x0,
+            space=self.space,
+            constraints=self.constraints,
+            **kwargs,
+        )
         runtime = perf_counter() - start
         if self.early_stopper is not None and self.early_stopper.stopped:
             early = True

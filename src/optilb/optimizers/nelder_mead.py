@@ -257,7 +257,7 @@ class NelderMeadOptimizer(Optimizer):
                         self._nfev += 1
                 try:
                     val = func(point)
-                except Exception:
+                except BaseException:
                     if manual_count:
                         with self._state_lock:
                             self._nfev = max(0, self._nfev - 1)
@@ -282,11 +282,52 @@ class NelderMeadOptimizer(Optimizer):
                 eval_points = [job[1] for job in jobs]
                 try:
                     iterator = executor.map(func, eval_points)
-                    for (idx, point, mapped, key, event), val in zip(jobs, iterator):
-                        if manual_count:
-                            with self._state_lock:
-                                self._nfev += 1
-                        try:
+                    _fallback_seq = False
+                    try:
+                        for (idx, point, mapped, key, event), val in zip(jobs, iterator):
+                            if manual_count:
+                                with self._state_lock:
+                                    self._nfev += 1
+                            try:
+                                self._update_best(point, val)
+                                _record_manual(point, mapped, val)
+                                if use_cache and key is not None:
+                                    local_results[key] = float(val)
+                                    if np.isfinite(val):
+                                        self._cache_complete(key, val, event)
+                                    else:
+                                        self._cache_fail(key, event)
+                                results[idx] = float(val)
+                            except BaseException:
+                                if manual_count:
+                                    with self._state_lock:
+                                        self._nfev = max(0, self._nfev - 1)
+                                if use_cache and key is not None and event is not None:
+                                    self._cache_fail(key, event)
+                                raise
+                    except StopIteration:
+                        raise
+                    except RuntimeError as exc:
+                        if str(exc) == "generator raised StopIteration":
+                            raise StopIteration from exc
+                        _fallback_seq = True
+                    except (AttributeError, TypeError):
+                        _fallback_seq = True
+                    if _fallback_seq:
+                        # Fall back to sequential evaluation (e.g. non-picklable objective)
+                        for idx, point, mapped, key, event in jobs:
+                            if manual_count:
+                                with self._state_lock:
+                                    self._nfev += 1
+                            try:
+                                val = func(point)
+                            except BaseException:
+                                if manual_count:
+                                    with self._state_lock:
+                                        self._nfev = max(0, self._nfev - 1)
+                                if use_cache and key is not None and event is not None:
+                                    self._cache_fail(key, event)
+                                raise
                             self._update_best(point, val)
                             _record_manual(point, mapped, val)
                             if use_cache and key is not None:
@@ -296,18 +337,7 @@ class NelderMeadOptimizer(Optimizer):
                                 else:
                                     self._cache_fail(key, event)
                             results[idx] = float(val)
-                        except Exception:
-                            if manual_count:
-                                with self._state_lock:
-                                    self._nfev = max(0, self._nfev - 1)
-                            if use_cache and key is not None and event is not None:
-                                self._cache_fail(key, event)
-                            raise
                 except StopIteration:
-                    raise
-                except RuntimeError as exc:
-                    if str(exc) == "generator raised StopIteration":
-                        raise StopIteration from exc
                     raise
 
         if use_cache:
