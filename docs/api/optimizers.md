@@ -44,14 +44,17 @@ print(result.best_x, result.best_f, result.nfev)
   `parallel_poll_points=True` to speculatively score reflection / expansion /
   contraction candidates together when running in parallel. All evaluated simplex
   vertices are captured in `evaluations`, even when running across processes.
-  With `memoize=True`, duplicate vertices are short-circuited in sequential and
-  thread-based executions (process pools fall back to uncached behaviour).
+  With `memoize=True`, duplicate vertices are short-circuited across sequential,
+  threaded, and process-based executions, including speculative batches emitted
+  by `parallel_poll_points=True`.
 - `MADSOptimizer` – interfaces with NOMAD's Mesh Adaptive Direct Search via the
   external `PyNomadBBO` package. Use `n_workers` to control NOMAD's evaluation
   threads and `normalize=True` to operate in the unit cube (finite bounds
   required). Reported evaluations are converted back to the original space
   before being logged. Memoisation requests are ignored because evaluations are
-  delegated to PyNomad.
+  delegated to PyNomad. Normalising highly anisotropic problems can improve
+  conditioning, but the mesh schedule may need more evaluations (`max_iter` /
+  `max_evals`) to recover the same solution quality as an unscaled run.
 
 All optimisers accept a `parallel` flag, `max_iter`, `max_evals`, `tol`, `seed`
 (where applicable), and optional constraint callbacks. History, `evaluations`,

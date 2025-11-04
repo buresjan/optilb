@@ -60,13 +60,17 @@ Built-in optimisers
   resamples the simplex after each iteration, honours constraint callbacks by
   applying the configured penalty, and captures every evaluated simplex vertex
   (even when running in parallel processes). With `memoize=True`, duplicate
-  simplex vertices are short-circuited in sequential and thread-parallel modes.
+  simplex vertices are short-circuited across sequential, threaded, and process
+  pools, including speculative batches triggered by `parallel_poll_points=True`.
 - `MADSOptimizer` – interfaces with NOMAD's Mesh Adaptive Direct Search via the
   `PyNomadBBO` package. Pass `normalize=True` to work in the unit cube (finite,
   non-degenerate bounds required). Provide `n_workers` to limit NOMAD's parallel
   evaluation threads. All evaluations reported by NOMAD are stored in original
   coordinates for post-analysis. Memoisation is currently ignored for this
-  optimiser because evaluations are delegated to PyNomad.
+  optimiser because evaluations are delegated to PyNomad. Normalisation helps
+  when objective scaling is wildly unbalanced, but PyNomad's default mesh rules
+  may need a higher evaluation budget to match the raw-space solution quality;
+  consider increasing `max_iter`/`max_evals` when enabling it.
 - `EarlyStopper` – a utility to halt optimisation when progress stalls. Reset it
   between runs (handled automatically by `OptimizationProblem` and
   `run_with_schedule`).

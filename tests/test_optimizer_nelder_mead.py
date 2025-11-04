@@ -53,6 +53,33 @@ class RecordingNelderMead(NelderMeadOptimizer):
         return super()._eval_points(func, pts_list, executor, manual_count)
 
 
+class RecordingMemoNelderMead(NelderMeadOptimizer):
+    """Capture _eval_points batches for memoisation checks."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.recorded_batches: list[list[np.ndarray]] = []
+
+    def _eval_points(  # type: ignore[override]
+        self,
+        func: Callable[[np.ndarray], float],
+        points: Iterable[np.ndarray],
+        executor: Executor | None,
+        manual_count: bool,
+        *,
+        map_input: Callable[[np.ndarray], np.ndarray] | None = None,
+    ) -> list[float]:
+        pts_list = [np.asarray(p, dtype=float) for p in points]
+        self.recorded_batches.append(pts_list)
+        return super()._eval_points(
+            func,
+            pts_list,
+            executor,
+            manual_count,
+            map_input=map_input,
+        )
+
+
 def test_nm_parallel_poll_points_batches() -> None:
     ds = DesignSpace(lower=-5 * np.ones(2), upper=5 * np.ones(2))
     x0 = np.array([1.0, 1.0])
@@ -247,3 +274,39 @@ def test_nm_parallel_memoize_handles_duplicate_simplex() -> None:
     assert len(res.evaluations) == 1
     assert res.best_f == pytest.approx(float(np.sum(x0**2)), abs=1e-12)
     assert len(opt._cache) == 1
+
+
+def test_nm_parallel_poll_points_respects_memoize() -> None:
+    ds = DesignSpace(lower=np.array([-1.0, -1.0]), upper=np.array([1.0, 1.0]))
+    x0 = np.array([0.3, -0.15])
+
+    opt = RecordingMemoNelderMead(
+        memoize=True,
+        n_workers=2,
+        parallel_poll_points=True,
+        alpha=0.0,
+    )
+    res = opt.optimize(
+        get_objective("quadratic"),
+        x0,
+        ds,
+        max_iter=1,
+        parallel=True,
+        normalize=False,
+    )
+
+    # ensure speculative batch included duplicates (reflection/expansion/outside contraction coincide)
+    duplicate_batches = []
+    for batch in opt.recorded_batches:
+        if len(batch) != 4:
+            continue
+        rounded = [tuple(np.round(pt, 12)) for pt in batch]
+        if len(set(rounded)) < len(rounded):
+            duplicate_batches.append(batch)
+    assert duplicate_batches, "Expected speculative poll batch to contain duplicates"
+
+    # Memoisation should avoid re-evaluating duplicate vertices.
+    assert res.nfev == len(opt._cache) == 5
+    assert res.best_f <= float(np.sum(x0**2))
+    # Cache must contain entries for all unique vertices encountered.
+    assert len(opt._cache) == 5

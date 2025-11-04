@@ -62,15 +62,19 @@ Built-in optimisers
   lower latency). The optimiser resamples the simplex after each iteration,
   honours constraint callbacks by applying the configured penalty, and captures
   every evaluated simplex vertex even in process-based parallel runs.
-  ``memoize=True`` enables a cache that short-circuits duplicate vertices in
-  sequential and thread-based execution.
+  ``memoize=True`` enables a cache that short-circuits duplicate vertices across
+  sequential, threaded, and process pools, including speculative batches run
+  with ``parallel_poll_points=True``.
 * :class:`optilb.optimizers.MADSOptimizer` – interfaces with NOMAD's Mesh
   Adaptive Direct Search via the ``PyNomadBBO`` package. Pass ``normalize=True``
   to work in the unit cube (finite, non-degenerate bounds required). Provide
   ``n_workers`` to limit NOMAD's parallel evaluation threads. All evaluations
   reported by NOMAD are stored in original coordinates for post-analysis.
   Memoisation is currently ignored because evaluations are handled entirely by
-  PyNomad.
+  PyNomad. Normalisation improves conditioning on highly anisotropic problems,
+  but PyNomad's mesh schedule can require larger evaluation budgets to reach the
+  same optimum quality as an unscaled run; raise ``max_iter``/``max_evals`` when
+  needed.
 * :class:`optilb.optimizers.EarlyStopper` – utility to halt optimisation when
   progress stalls. Reset it between runs (handled automatically by
   :class:`optilb.problem.OptimizationProblem` and
