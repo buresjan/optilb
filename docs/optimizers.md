@@ -62,6 +62,42 @@ Built-in optimisers
   (even when running in parallel processes). With `memoize=True`, duplicate
   simplex vertices are short-circuited across sequential, threaded, and process
   pools, including speculative batches triggered by `parallel_poll_points=True`.
+  Pass both `initial_simplex` and `initial_simplex_values` to start from a
+  pre-evaluated simplex (dimension + 1 vertices). Vertices are supplied in
+  physical coordinates and are mapped to the unit cube automatically when
+  `normalize=True`. When provided, the initial simplex evaluation phase is
+  skipped and Nelder-Mead proceeds directly to simplex transformations. Bounds
+  and constraints are checked; invalid vertices receive the penalty value.
+
+### Nelder–Mead with a predefined simplex
+
+```python
+import numpy as np
+from optilb import DesignSpace, get_objective
+from optilb.optimizers import NelderMeadOptimizer
+
+space = DesignSpace(lower=np.array([0.0, -5.0]), upper=np.array([10.0, 5.0]))
+objective = get_objective("quadratic")
+
+simplex = [
+    np.array([0.0, -5.0]),
+    np.array([2.0, -3.0]),
+    np.array([4.0, -1.0]),
+]
+simplex_values = [objective(v) for v in simplex]
+
+opt = NelderMeadOptimizer()
+res = opt.optimize(
+    objective,
+    x0=simplex[0],
+    space=space,
+    initial_simplex=simplex,
+    initial_simplex_values=simplex_values,
+    normalize=True,  # vertices are mapped to the unit cube automatically
+    max_iter=50,
+)
+print(res.best_x, res.best_f, res.nfev)
+```
 - `MADSOptimizer` – interfaces with NOMAD's Mesh Adaptive Direct Search via the
   `PyNomadBBO` package. Pass `normalize=True` to work in the unit cube (finite,
   non-degenerate bounds required). Provide `n_workers` to limit NOMAD's parallel

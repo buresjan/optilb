@@ -310,3 +310,53 @@ def test_nm_parallel_poll_points_respects_memoize() -> None:
     assert res.best_f <= float(np.sum(x0**2))
     # Cache must contain entries for all unique vertices encountered.
     assert len(opt._cache) == 5
+
+
+def test_nm_uses_precomputed_simplex_with_normalization() -> None:
+    ds = DesignSpace(
+        lower=np.array([10.0, -5.0]),
+        upper=np.array([20.0, 5.0]),
+    )
+    simplex = [
+        np.array([10.0, -5.0]),
+        np.array([12.0, -3.0]),
+        np.array([15.0, 0.0]),
+    ]
+    simplex_values = [float(np.sum(pt**2)) for pt in simplex]
+
+    def fail_objective(_: np.ndarray) -> float:
+        raise AssertionError("Objective should not be called for initial simplex")
+
+    opt = NelderMeadOptimizer()
+    res = opt.optimize(
+        fail_objective,
+        np.array([12.0, -3.0]),
+        ds,
+        initial_simplex=simplex,
+        initial_simplex_values=simplex_values,
+        max_iter=0,
+        normalize=True,
+    )
+
+    best_idx = int(np.argmin(simplex_values))
+    np.testing.assert_allclose(res.best_x, simplex[best_idx])
+    assert res.best_f == pytest.approx(simplex_values[best_idx], abs=1e-12)
+    assert res.nfev == len(simplex)
+    assert len(res.evaluations) == len(simplex)
+    for record, expected in zip(res.evaluations, simplex):
+        np.testing.assert_allclose(record.x, expected)
+
+
+def test_nm_precomputed_simplex_dimension_mismatch_raises() -> None:
+    ds = DesignSpace(lower=np.zeros(2), upper=np.ones(2))
+    simplex = [np.array([0.0]), np.array([0.1]), np.array([0.2])]
+
+    opt = NelderMeadOptimizer()
+    with pytest.raises(ValueError, match="dimension"):
+        opt.optimize(
+            get_objective("quadratic"),
+            np.zeros(2),
+            ds,
+            initial_simplex=simplex,
+            initial_simplex_values=[0.0, 0.01, 0.04],
+        )

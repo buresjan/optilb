@@ -372,6 +372,8 @@ class NelderMeadOptimizer(Optimizer):
         space: DesignSpace,
         constraints: Sequence[Constraint] = (),
         *,
+        initial_simplex: Sequence[np.ndarray] | np.ndarray | None = None,
+        initial_simplex_values: Sequence[float] | None = None,
         max_iter: int = 100,
         max_evals: int | None = None,
         tol: float = 1e-6,
@@ -388,10 +390,38 @@ class NelderMeadOptimizer(Optimizer):
         when constructing the optimiser to speculatively score reflection,
         expansion, and contraction candidates together each iteration. When
         ``normalize=True``, optimisation happens in the unit hypercube and
-        results/history are mapped back.
+        results/history are mapped back. Provide both ``initial_simplex`` and
+        ``initial_simplex_values`` to skip the initial simplex evaluation phase
+        using pre-computed vertices in the original coordinate system (they are
+        mapped to the unit cube when ``normalize=True``).
         """
         if seed is not None:
             np.random.default_rng(seed)
+
+        original_space = space
+        provided_simplex: list[np.ndarray] | None = None
+        provided_fvals: list[float] | None = None
+        if initial_simplex is not None or initial_simplex_values is not None:
+            if initial_simplex is None or initial_simplex_values is None:
+                raise ValueError(
+                    "initial_simplex and initial_simplex_values must be provided together"
+                )
+            provided_simplex = [np.asarray(pt, dtype=float) for pt in initial_simplex]
+            provided_fvals = [float(val) for val in initial_simplex_values]
+            expected_vertices = original_space.dimension + 1
+            if len(provided_simplex) != expected_vertices:
+                raise ValueError("initial_simplex must contain dimension + 1 vertices")
+            if len(provided_fvals) != len(provided_simplex):
+                raise ValueError(
+                    "initial_simplex_values length must match initial_simplex"
+                )
+            for vertex in provided_simplex:
+                if vertex.shape != original_space.lower.shape:
+                    raise ValueError("Initial simplex vertex has wrong dimension")
+                if np.any(vertex < original_space.lower) or np.any(
+                    vertex > original_space.upper
+                ):
+                    raise ValueError("Initial simplex vertex outside design bounds")
 
         # -------------------- optional normalisation -------------------
         # We create picklable wrappers via top-level helpers + partials.
@@ -432,12 +462,18 @@ class NelderMeadOptimizer(Optimizer):
             # Replace design space and initial point with unit versions
             space = DesignSpace(np.zeros(space.dimension), np.ones(space.dimension))
             x0 = normalize_transform.to_unit(x0)
+            if provided_simplex is not None:
+                provided_simplex = [
+                    normalize_transform.to_unit(pt) for pt in provided_simplex
+                ]
 
             # keep transform for history post-processing
             self._history_transform = normalize_transform
 
         # Normal validation/wrapping continues with possibly replaced
         # `space/objective/x0`
+        if provided_simplex is not None:
+            x0 = np.asarray(provided_simplex[0], dtype=float)
         x0 = self._validate_x0(x0, space)
 
         raw_objective = objective
@@ -448,16 +484,16 @@ class NelderMeadOptimizer(Optimizer):
 
         self.reset_history()
         self._configure_budget(max_evals)
-        self.record(x0, tag="start")
 
         n = space.dimension
-        step = np.asarray(self.step, dtype=float)
-        if step.size == 1:
-            step = np.full(n, float(step))
-        if step.shape != (n,):
-            raise ValueError("step must be scalar or of length equal to dimension")
-        # NOTE: do NOT scale `step` by original spans when normalize=True;
-        # in unit space, step means exactly that fraction of [0,1].
+        use_provided_simplex = provided_simplex is not None
+        simplex: list[np.ndarray]
+        if use_provided_simplex:
+            simplex = [np.asarray(pt, dtype=float) for pt in provided_simplex]
+        else:
+            simplex = [x0]
+
+        self.record(simplex[0], tag="start")
 
         penalised_counting = self._make_penalised(
             counted_objective, space, constraints
@@ -468,7 +504,6 @@ class NelderMeadOptimizer(Optimizer):
             early_stopper.reset()
 
         # ----------------------------- executor -------------------------
-        simplex: list[np.ndarray] = [x0]
         fvals: list[float] = []
         try:
             with _parallel_executor(parallel, self.n_workers) as (
@@ -476,30 +511,86 @@ class NelderMeadOptimizer(Optimizer):
                 manual_count,
             ):
                 evaluate = penalised_raw if manual_count else penalised_counting
-                # initial simplex (N + 1 points)
-                for i in range(n):
-                    pt = x0.copy()
-                    pt[i] += step[i]
-                    simplex.append(pt)
                 # Backwards compatibility: tests may override _eval_points without
                 # accepting the `map_input` keyword.
                 _ep_params = inspect.signature(self._eval_points).parameters
                 _supports_map_kw = "map_input" in _ep_params
-                if _supports_map_kw:
-                    fvals = self._eval_points(
-                        evaluate,
-                        simplex,
-                        executor,
-                        manual_count,
-                        map_input=eval_map,
-                    )
+                if use_provided_simplex:
+                    assert provided_fvals is not None
+                    fvals = []
+                    for vertex, value in zip(simplex, provided_fvals):
+                        arr = np.asarray(vertex, dtype=float)
+                        violated = bool(
+                            np.any(arr < space.lower) or np.any(arr > space.upper)
+                        )
+                        if not violated:
+                            for constraint in constraints:
+                                c_val = constraint(arr)
+                                if isinstance(c_val, bool):
+                                    if not c_val:
+                                        violated = True
+                                        break
+                                else:
+                                    if float(c_val) > 0.0:
+                                        violated = True
+                                        break
+                        adjusted_val = float(self.penalty if violated else value)
+                        record_point = (
+                            np.asarray(eval_map(arr), dtype=float)
+                            if eval_map is not None
+                            else arr
+                        )
+                        with self._state_lock:
+                            if (
+                                self._max_evals is not None
+                                and self._nfev >= self._max_evals
+                            ):
+                                self._budget_exhausted = True
+                                raise EvaluationBudgetExceeded(self._max_evals)
+                            self._nfev += 1
+                            self._last_eval_point = arr.copy()
+                            if (
+                                self._max_evals is not None
+                                and self._nfev >= self._max_evals
+                            ):
+                                self._budget_exhausted = True
+                        self._update_best(arr, adjusted_val)
+                        self._record_evaluation(record_point, adjusted_val)
+                        if self._cache_enabled:
+                            key = self._make_cache_key(record_point)
+                            self._cache[key] = float(adjusted_val)
+                        fvals.append(float(adjusted_val))
                 else:
-                    fvals = self._eval_points(
-                        evaluate,
-                        simplex,
-                        executor,
-                        manual_count,
-                    )
+                    step = np.asarray(self.step, dtype=float)
+                    if step.size == 1:
+                        step = np.full(n, float(step))
+                    if step.shape != (n,):
+                        raise ValueError(
+                            "step must be scalar or of length equal to dimension"
+                        )
+                    # NOTE: do NOT scale `step` by original spans when normalize=True;
+                    # in unit space, step means exactly that fraction of [0,1].
+
+                    # initial simplex (N + 1 points)
+                    for i in range(n):
+                        pt = simplex[0].copy()
+                        pt[i] += step[i]
+                        simplex.append(pt)
+                    if _supports_map_kw:
+                        fvals = self._eval_points(
+                            evaluate,
+                            simplex,
+                            executor,
+                            manual_count,
+                            map_input=eval_map,
+                        )
+                    else:
+                        fvals = self._eval_points(
+                            evaluate,
+                            simplex,
+                            executor,
+                            manual_count,
+                        )
 
                 best = min(fvals)
                 no_improv = 0

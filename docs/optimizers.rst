@@ -64,7 +64,12 @@ Built-in optimisers
   every evaluated simplex vertex even in process-based parallel runs.
   ``memoize=True`` enables a cache that short-circuits duplicate vertices across
   sequential, threaded, and process pools, including speculative batches run
-  with ``parallel_poll_points=True``.
+  with ``parallel_poll_points=True``. Provide both ``initial_simplex`` and
+  ``initial_simplex_values`` to start from a pre-evaluated simplex (dimension +
+  1 vertices). Vertices are supplied in physical coordinates and are mapped to
+  the unit cube automatically when ``normalize=True``. The initial simplex
+  evaluation phase is skipped in that case; bounds and constraints are checked
+  and infeasible vertices receive the configured penalty.
 * :class:`optilb.optimizers.MADSOptimizer` – interfaces with NOMAD's Mesh
   Adaptive Direct Search via the ``PyNomadBBO`` package. Pass ``normalize=True``
   to work in the unit cube (finite, non-degenerate bounds required). Provide
@@ -82,3 +87,34 @@ Built-in optimisers
 
 All optimisers expose ``history``, ``evaluations`` and the ``budget_exhausted``
 flag on the base class. Use them to inspect the run after calling ``optimize``.
+
+Nelder–Mead with a predefined simplex
+-------------------------------------
+
+.. code-block:: python
+
+   import numpy as np
+   from optilb import DesignSpace, get_objective
+   from optilb.optimizers import NelderMeadOptimizer
+
+   space = DesignSpace(lower=np.array([0.0, -5.0]), upper=np.array([10.0, 5.0]))
+   objective = get_objective("quadratic")
+
+   simplex = [
+       np.array([0.0, -5.0]),
+       np.array([2.0, -3.0]),
+       np.array([4.0, -1.0]),
+   ]
+   simplex_values = [objective(v) for v in simplex]
+
+   opt = NelderMeadOptimizer()
+   res = opt.optimize(
+       objective,
+       x0=simplex[0],
+       space=space,
+       initial_simplex=simplex,
+       initial_simplex_values=simplex_values,
+       normalize=True,  # vertices are mapped to the unit cube automatically
+       max_iter=50,
+   )
+   print(res.best_x, res.best_f, res.nfev)
