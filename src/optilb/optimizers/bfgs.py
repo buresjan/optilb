@@ -147,6 +147,28 @@ class BFGSOptimizer(Optimizer):
         if early_stopper is not None:
             early_stopper.reset()
 
+        def _early_exit_result() -> OptResult:
+            best_point, best_value = self._get_best_evaluation()
+            if best_point is not None and best_value is not None:
+                best = best_point
+                best_f = float(best_value)
+            elif last_eval_point is not None and last_eval_value is not None:
+                best = np.asarray(last_eval_point, dtype=float).copy()
+                best_f = float(last_eval_value)
+            else:
+                best = np.asarray(x0, dtype=float).copy()
+                best_f = float("inf")
+            if transform is not None:
+                best = transform.from_unit(best)
+            self.finalize_history()
+            return OptResult(
+                best_x=best,
+                best_f=best_f,
+                history=self.history,
+                evaluations=self.evaluations,
+                nfev=self.nfev,
+            )
+
         def _callback(xk: np.ndarray) -> None:
             nonlocal last_eval_point, last_eval_value
             self.record(xk, tag=f"{len(self._history)}")
@@ -275,34 +297,12 @@ class BFGSOptimizer(Optimizer):
                 )
         except StopIteration:
             logger.info("Optimization stopped early by callback")
-            best = self.history[-1].x
-            best_f = last_eval_value if last_eval_value is not None else wrapped_obj.last_val
-            if transform is not None:
-                best = transform.from_unit(best)
-            self.finalize_history()
-            result = OptResult(
-                best_x=best,
-                best_f=float(best_f if best_f is not None else float("nan")),
-                history=self.history,
-                evaluations=self.evaluations,
-                nfev=self.nfev,
-            )
+            result = _early_exit_result()
             self._clear_budget()
             return result
         except EvaluationBudgetExceeded:
             logger.info("Optimization stopped after reaching the evaluation budget")
-            best = self.history[-1].x
-            best_f = last_eval_value if last_eval_value is not None else wrapped_obj.last_val
-            if transform is not None:
-                best = transform.from_unit(best)
-            self.finalize_history()
-            result = OptResult(
-                best_x=best,
-                best_f=float(best_f if best_f is not None else float("nan")),
-                history=self.history,
-                evaluations=self.evaluations,
-                nfev=self.nfev,
-            )
+            result = _early_exit_result()
             self._clear_budget()
             return result
 

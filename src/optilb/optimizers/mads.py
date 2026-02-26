@@ -21,6 +21,10 @@ from .early_stop import EarlyStopper
 logger = logging.getLogger("optilb")
 
 
+class _MadsEarlyStop(Exception):
+    """Internal sentinel used to stop NOMAD from the black-box callback."""
+
+
 def _validate_bounds(lb: np.ndarray, ub: np.ndarray) -> None:
     """Ensure bounds are finite and non-degenerate."""
 
@@ -194,6 +198,8 @@ class MADSOptimizer(Optimizer):
             for g in con_funcs:
                 vals.append(float(g(arr)))
             point.setBBO(" ".join(str(v) for v in vals).encode("utf-8"))
+            if early_stopper is not None and early_stopper.update(fval):
+                raise _MadsEarlyStop
             return 1
 
         output_types = "OBJ" + " PB" * len(con_funcs)
@@ -212,13 +218,45 @@ class MADSOptimizer(Optimizer):
             threads = self.n_workers or os.cpu_count() or 1
             params.append(f"NB_THREADS_PARALLEL_EVAL {threads}")
 
-        res = PyNomad.optimize(
-            _bb,
-            x0.tolist(),
-            space.lower.tolist(),
-            space.upper.tolist(),
-            params,
-        )
+        early_stop_requested = False
+        res: dict[str, Any] | None = None
+        try:
+            res = PyNomad.optimize(
+                _bb,
+                x0.tolist(),
+                space.lower.tolist(),
+                space.upper.tolist(),
+                params,
+            )
+        except _MadsEarlyStop:
+            early_stop_requested = True
+            logger.info("MADS optimization stopped early by EarlyStopper")
+        finally:
+            self._clear_budget()
+
+        if early_stop_requested:
+            best_eval_x, best_eval_f = self._get_best_evaluation()
+            if best_eval_x is not None and best_eval_f is not None:
+                best = np.asarray(best_eval_x, dtype=float)
+                best_f = float(best_eval_f)
+            else:
+                best = np.asarray(x0, dtype=float).copy()
+                best_f = float("inf")
+            if normalize:
+                best = _unscale(best)
+                self._history_scaled = history_scaled
+            else:
+                self._history_scaled = None
+            return OptResult(
+                best_x=best,
+                best_f=best_f,
+                history=self.history,
+                evaluations=self.evaluations,
+                nfev=self.nfev,
+            )
+
+        if res is None:
+            raise RuntimeError("PyNomad did not return a result")
         best = np.array(res["x_best"], dtype=float)
         if normalize:
             best = _unscale(best)
@@ -226,12 +264,10 @@ class MADSOptimizer(Optimizer):
         else:
             self._history_scaled = None
         best_f = float(res["f_best"])
-        result = OptResult(
+        return OptResult(
             best_x=best,
             best_f=best_f,
             history=self.history,
             evaluations=self.evaluations,
             nfev=self.nfev,
         )
-        self._clear_budget()
-        return result
