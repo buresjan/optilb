@@ -5,6 +5,7 @@ The documentation is written in both reStructuredText (.rst) and Markdown (.md) 
 * `sampling.rst`/`sampling.md` cover the Latin-Hypercube sampler.
 * `objectives.rst`/`objectives.md` document analytic objective functions.
 * `optimizers.rst`/`optimizers.md` describe built-in local optimizers.
+* `benchmark_nm.rst`/`benchmark_nm.md` document the fair SciPy-vs-optilb Nelder-Mead benchmark workflow.
 * `runner.rst`/`runner.md` illustrate scheduled optimisation runs.
 * `core.rst`/`core.md` detail shared dataclasses, logs, and exceptions.
 * `api/` contains API reference files mirroring these modules (including `api/core.*`).

@@ -105,6 +105,8 @@ features and progress live in the GitHub issue tracker and project board.
 
 - `examples/basic_usage.py` – quick sanity checks.
 - `examples/compare_optimisers.py` – benchmark built-in optimisers on toy objectives.
+- `examples/benchmark_nm_vs_scipy.py` – fair Nelder-Mead benchmark: SciPy vs custom serial and parallel implementations.
+- `examples/demo.py` – `OptimizationProblem` walkthrough across available optimisers.
 - `examples/plot_objectives.py` – visualise 2D objective functions.
 - `examples/parallel_speedup.py` – demonstrate parallel Nelder–Mead speed-up on a slow objective.
 - `examples/evaluation_log_demo.py` – capture evaluation logs for Nelder–Mead (and MADS when PyNomad is installed), saving them as `evaluation_log_nm.txt` and `evaluation_log_mads.txt`.

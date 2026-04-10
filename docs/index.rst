@@ -8,6 +8,7 @@ optilb Documentation
    sampling
    objectives
    optimizers
+   benchmark_nm
    runner
    problem
    core
