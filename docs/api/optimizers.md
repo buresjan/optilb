@@ -34,6 +34,8 @@ print(result.best_x, result.best_f, result.nfev)
 - `BFGSOptimizer` – wraps SciPy's L-BFGS-B algorithm. Numerical gradients default
   to central differences with step size `fd_eps` (or legacy alias `step`);
   setting `n_workers` allows threaded gradient evaluations when `parallel=True`.
+  In 2D, the parallel central-difference stencil is dispatched as one four-point
+  batch so expensive blocking objectives can overlap all side evaluations.
   With `normalize=True` the design space is mapped to `[0, 1]^d` before calling
   SciPy and history/evaluations are mapped back afterwards. Enable memoisation
   via `memoize=True` to reuse duplicate evaluations encountered during

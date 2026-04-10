@@ -50,7 +50,9 @@ Built-in optimisers
   coordinates, and supports numerical gradients via central differences. Use
   `fd_eps` (or the legacy alias `step`) to set finite-difference steps; pass
   `n_workers` to parallelise gradient evaluations with threads when
-  `parallel=True`. Set `memoize=True` to reuse repeated evaluations during
+  `parallel=True`. In 2D, the parallel central-difference stencil is dispatched
+  as one four-point batch so expensive blocking objectives can overlap all side
+  evaluations. Set `memoize=True` to reuse repeated evaluations during
   central-difference sweeps.
 - `NelderMeadOptimizer` – derivative-free simplex search with optional
   normalisation and process-based parallelism. Objectives and constraints must be

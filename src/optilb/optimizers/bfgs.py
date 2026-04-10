@@ -58,6 +58,17 @@ class BFGSOptimizer(Optimizer):
         self.n_workers = n_workers
         self._history_transform: SpaceTransform | None = None
 
+    def _eval_points(
+        self,
+        func: Callable[[np.ndarray], float],
+        points: Sequence[np.ndarray],
+        executor: ThreadPoolExecutor | None,
+    ) -> list[float]:
+        pts = [np.asarray(point, dtype=float) for point in points]
+        if executor is None:
+            return [float(func(point)) for point in pts]
+        return [float(value) for value in executor.map(func, pts)]
+
     def optimize(
         self,
         objective: Callable[[np.ndarray], float],
@@ -240,12 +251,25 @@ class BFGSOptimizer(Optimizer):
                     plus_pts.append(xp)
                     minus_pts.append(xm)
 
-                if _executor is not None:
-                    f_plus = list(_executor.map(wrapped_obj, plus_pts))
-                    f_minus = list(_executor.map(wrapped_obj, minus_pts))
+                if _executor is not None and n_dim == 2:
+                    # Submit the full 2D stencil in one batch so cluster-backed
+                    # objectives can overlap all four side evaluations.
+                    # TODO: Generalize this to a true batched-objective interface
+                    # for higher-dimensional finite-difference stencils.
+                    stencil_pts = [
+                        plus_pts[0],
+                        minus_pts[0],
+                        plus_pts[1],
+                        minus_pts[1],
+                    ]
+                    stencil_vals = self._eval_points(
+                        wrapped_obj, stencil_pts, _executor
+                    )
+                    f_plus = [stencil_vals[0], stencil_vals[2]]
+                    f_minus = [stencil_vals[1], stencil_vals[3]]
                 else:
-                    f_plus = [float(wrapped_obj(z)) for z in plus_pts]
-                    f_minus = [float(wrapped_obj(z)) for z in minus_pts]
+                    f_plus = self._eval_points(wrapped_obj, plus_pts, _executor)
+                    f_minus = self._eval_points(wrapped_obj, minus_pts, _executor)
 
                 f0_cache: float | None = None
                 for i in range(n_dim):

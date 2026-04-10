@@ -52,8 +52,10 @@ Built-in optimisers
   coordinates, and supports numerical gradients via central differences. Use
   ``fd_eps`` (or the legacy alias ``step``) to set finite-difference steps; pass
   ``n_workers`` to parallelise gradient evaluations with threads when
-  ``parallel=True``. Setting ``memoize=True`` reuses repeated evaluations during
-  finite-difference sweeps.
+  ``parallel=True``. In 2D, the parallel central-difference stencil is
+  dispatched as one four-point batch so expensive blocking objectives can
+  overlap all side evaluations. Setting ``memoize=True`` reuses repeated
+  evaluations during finite-difference sweeps.
 * :class:`optilb.optimizers.NelderMeadOptimizer` – derivative-free simplex search
   with optional normalisation and process-based parallelism. Objectives and
   constraints must be picklable when running with ``parallel=True``. Set

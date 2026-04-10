@@ -37,6 +37,55 @@ def test_bfgs_fd_array_eps() -> None:
     assert res.best_f == pytest.approx(0.0, abs=1e-6)
 
 
+def test_bfgs_fd_parallel_batches_full_2d_stencil() -> None:
+    ds = DesignSpace(lower=-5 * np.ones(2), upper=5 * np.ones(2))
+    x0 = np.array([2.0, 2.0])
+    opt = BFGSOptimizer(fd_eps=[1e-3, 2e-3], n_workers=4)
+
+    expected_stencil = {
+        (2.001, 2.0),
+        (1.999, 2.0),
+        (2.0, 2.002),
+        (2.0, 1.998),
+    }
+    stencil_started: set[tuple[float, float]] = set()
+    stencil_ready = threading.Event()
+    log: list[tuple[str, tuple[float, float]]] = []
+    log_lock = threading.Lock()
+
+    def traced_quadratic(x: np.ndarray) -> float:
+        point = tuple(float(value) for value in np.round(np.asarray(x, dtype=float), 6))
+        with log_lock:
+            log.append(("start", point))
+            if point in expected_stencil:
+                stencil_started.add(point)
+                if len(stencil_started) == len(expected_stencil):
+                    stencil_ready.set()
+        if point in expected_stencil:
+            stencil_ready.wait(timeout=0.5)
+        else:
+            time.sleep(0.01)
+        value = quadratic(np.asarray(point, dtype=float))
+        with log_lock:
+            log.append(("end", point))
+        return value
+
+    opt.optimize(
+        traced_quadratic,
+        x0,
+        ds,
+        max_iter=1,
+        parallel=True,
+        normalize=False,
+    )
+
+    first_center_end = log.index(("end", (2.0, 2.0)))
+    first_stencil_events = log[first_center_end + 1 : first_center_end + 5]
+    assert len(first_stencil_events) == 4
+    assert all(kind == "start" for kind, _ in first_stencil_events)
+    assert {point for _, point in first_stencil_events} == expected_stencil
+
+
 def test_bfgs_fd_parallel_speed() -> None:
     ds = DesignSpace(lower=-5 * np.ones(6), upper=5 * np.ones(6))
     x0 = np.full(6, 2.0)

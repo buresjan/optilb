@@ -57,6 +57,9 @@ an optional ``EarlyStopper`` (with patience, target value, and time limit
 controls) to terminate runs when progress stalls.  The ``runner.run_with_schedule``
 helper executes an optimiser across multiple scale levels and clones any early
 stopper so that each level tracks progress independently.
+For 2D numerical BFGS runs, ``parallel=True`` dispatches the full
+central-difference stencil as one four-point batch so expensive blocking
+objectives can overlap all side evaluations.
 
 For a higher‑level entry point that makes cross‑method comparisons easy,
 construct an :class:`OptimizationProblem`.  It accepts the objective, design
